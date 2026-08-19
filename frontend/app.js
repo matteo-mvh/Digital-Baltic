@@ -361,6 +361,19 @@ const NOISE_EVENT_GROUPS = {
   unknown: { labelKey: "noise.eventUnknown", fallbackLabel: "Unknown event", color: "#c8d4dc" }
 };
 
+const OCEAN_RENDER_MODE_OPTIONS = {
+  currents: [
+    { id: "speedParticles", label: "Speed + particles" },
+    { id: "particlesOnly", label: "Particles only" },
+    { id: "arrows", label: "Arrows" }
+  ],
+  waves: [
+    { id: "heightStreaks", label: "Height + streaks" },
+    { id: "streaksOnly", label: "Streaks only" },
+    { id: "arrows", label: "Arrows" }
+  ]
+};
+
 const state = {
   locale: "en",
   translations: {},
@@ -383,9 +396,11 @@ const state = {
     collapsed: {},
     mobileExpandedId: null
   },
-  oceanTiles: {
-    levelId: null,
-    activeKeys: new Set(),
+  oceanRenderModes: {
+    currents: "speedParticles",
+    waves: "heightStreaks"
+  },
+  oceanVisuals: {
     sourceIds: new Set(),
     requestToken: 0
   },
@@ -644,13 +659,9 @@ function currentFrame() {
   return activeConditionMetadata()?.frames?.[state.activeFrameIndex] ?? null;
 }
 
-function levelForZoom(zoom) {
-  const levels = activeConditionMetadata()?.tiling?.levels ?? [];
-  return (
-    levels.find((level) => zoom >= level.zoom_min && zoom <= level.zoom_max) ??
-    levels[levels.length - 1] ??
-    null
-  );
+function visibleViewportBbox() {
+  const bounds = state.map.getBounds();
+  return [bounds.getWest(), bounds.getSouth(), bounds.getEast(), bounds.getNorth()];
 }
 
 function imageCoordinatesFromBbox(bbox) {
@@ -662,126 +673,675 @@ function imageCoordinatesFromBbox(bbox) {
   ];
 }
 
-function tileBoundsIntersect(tileBbox, viewportBbox) {
-  const tileWest = tileBbox[0][0];
-  const tileSouth = tileBbox[0][1];
-  const tileEast = tileBbox[1][0];
-  const tileNorth = tileBbox[1][1];
-  const viewWest = viewportBbox[0];
-  const viewSouth = viewportBbox[1];
-  const viewEast = viewportBbox[2];
-  const viewNorth = viewportBbox[3];
-
-  return !(tileEast < viewWest || tileWest > viewEast || tileNorth < viewSouth || tileSouth > viewNorth);
+function clamp(value, min, max) {
+  return Math.min(Math.max(value, min), max);
 }
 
-function visibleViewportBbox() {
-  const bounds = state.map.getBounds();
-  return [bounds.getWest(), bounds.getSouth(), bounds.getEast(), bounds.getNorth()];
+function lerp(start, end, ratio) {
+  return start + (end - start) * ratio;
 }
 
-function tilesForViewport(level) {
-  const viewportBbox = visibleViewportBbox();
-  const directlyVisible = level.tiles.filter((tile) => tileBoundsIntersect(tile.bbox, viewportBbox));
-  const visibleKeys = new Set(directlyVisible.map((tile) => `${tile.x}:${tile.y}`));
-  return level.tiles.filter((tile) => {
-    if (visibleKeys.has(`${tile.x}:${tile.y}`)) {
-      return true;
+function oceanPaletteName(conditionId = state.activeConditionId) {
+  if (conditionId === "temperature") {
+    return state.palette;
+  }
+  if (conditionId === "salinity" || conditionId === "waves") {
+    return "yellowBlue";
+  }
+  if (conditionId === "currents" || conditionId === "oxygen") {
+    return "greenRed";
+  }
+  return "blueRed";
+}
+
+function renderModeOptions(conditionId = state.activeConditionId) {
+  return OCEAN_RENDER_MODE_OPTIONS[conditionId] ?? [];
+}
+
+function activeRenderModeId(conditionId = state.activeConditionId) {
+  const options = renderModeOptions(conditionId);
+  if (options.length === 0) {
+    return null;
+  }
+  return state.oceanRenderModes[conditionId] ?? options[0].id;
+}
+
+function oceanScalarLayerVisible() {
+  if (!oceanLayerVisible()) {
+    return false;
+  }
+  if (state.activeConditionId === "currents") {
+    return activeRenderModeId() === "speedParticles";
+  }
+  if (state.activeConditionId === "waves") {
+    return activeRenderModeId() === "heightStreaks";
+  }
+  return true;
+}
+
+function oceanVectorLayerVisible() {
+  return oceanLayerVisible() && (state.activeConditionId === "currents" || state.activeConditionId === "waves");
+}
+
+function emptyFeatureCollection() {
+  return { type: "FeatureCollection", features: [] };
+}
+
+function buildCellEdges(values) {
+  const numeric = values.map((value) => Number(value));
+  if (numeric.length === 1) {
+    return [numeric[0] - 0.05, numeric[0] + 0.05];
+  }
+  const edges = new Array(numeric.length + 1);
+  edges[0] = numeric[0] - (numeric[1] - numeric[0]) / 2;
+  for (let index = 1; index < numeric.length; index += 1) {
+    edges[index] = (numeric[index - 1] + numeric[index]) / 2;
+  }
+  edges[numeric.length] = numeric[numeric.length - 1] + (numeric[numeric.length - 1] - numeric[numeric.length - 2]) / 2;
+  return edges;
+}
+
+function findIntervalIndex(edges, target) {
+  if (!Array.isArray(edges) || edges.length < 2) {
+    return 0;
+  }
+  if (target <= edges[0]) {
+    return 0;
+  }
+  if (target >= edges[edges.length - 1]) {
+    return edges.length - 2;
+  }
+  let low = 0;
+  let high = edges.length - 2;
+  while (low <= high) {
+    const middle = Math.floor((low + high) / 2);
+    if (target < edges[middle]) {
+      high = middle - 1;
+    } else if (target >= edges[middle + 1]) {
+      low = middle + 1;
+    } else {
+      return middle;
     }
-    return directlyVisible.some(
-      (visibleTile) =>
-        Math.abs(visibleTile.x - tile.x) <= level.preload_ring &&
-        Math.abs(visibleTile.y - tile.y) <= level.preload_ring
-    );
-  });
-}
-
-function oceanTileKey(levelId, tile) {
-  return `${state.activeConditionId}:${levelId}:${tile.x}:${tile.y}`;
-}
-
-function oceanTileSourceId(key) {
-  return `ocean-tile-${key.replaceAll(":", "-")}`;
-}
-
-function oceanTileUrl(levelId, tile) {
-  const frame = currentFrame();
-  const metadata = activeConditionMetadata();
-  const paletteSegment = state.activeConditionId === "temperature" ? state.palette : "default";
-  const frameTileRoot = frame?.tile_path || `${metadata.tiling.tile_root_url}/${frame?.key}`;
-  return `${frameTileRoot}/${levelId}/${paletteSegment}/${tile.x}_${tile.y}.png`;
-}
-
-function refreshOceanTiles() {
-  const metadata = activeConditionMetadata();
-  if (!state.map || !metadata?.tiling || !oceanLayerVisible()) {
-    return;
   }
+  return clamp(low, 0, edges.length - 2);
+}
 
-  const level = levelForZoom(state.map.getZoom());
-  if (!level) {
-    return;
+function numericGridValue(grid, rowIndex, columnIndex) {
+  const rawValue = grid?.[rowIndex]?.[columnIndex];
+  if (rawValue === null || rawValue === undefined || rawValue === "") {
+    return null;
   }
+  const value = Number(rawValue);
+  return Number.isFinite(value) ? value : null;
+}
 
-  const token = ++state.oceanTiles.requestToken;
-  const neededTiles = tilesForViewport(level);
-  const nextKeys = new Set();
+function componentFrame(queryIndex, componentName, frameIndex) {
+  return queryIndex?.components?.[componentName]?.[frameIndex] ?? null;
+}
 
-  for (const tile of neededTiles) {
-    const key = oceanTileKey(level.id, tile);
-    const sourceId = oceanTileSourceId(key);
-    const coordinates = imageCoordinatesFromBbox(tile.bbox);
-    const url = oceanTileUrl(level.id, tile);
-    nextKeys.add(key);
+function rgbaString(color, alpha = 1) {
+  const opacity = clamp(alpha, 0, 1);
+  return `rgba(${color.r}, ${color.g}, ${color.b}, ${opacity.toFixed(3)})`;
+}
 
-    if (state.map.getSource(sourceId)) {
-      const source = state.map.getSource(sourceId);
-      if (typeof source.updateImage === "function") {
-        source.updateImage({ url, coordinates });
+function displayRangeForMetadata(metadata) {
+  const range = metadata?.value_range_celsius ?? metadata?.value_range ?? null;
+  return {
+    min: Number.isFinite(Number(range?.display_min)) ? Number(range.display_min) : 0,
+    max: Number.isFinite(Number(range?.display_max)) ? Number(range.display_max) : 1
+  };
+}
+
+function valueToFillColor(value, metadata, conditionId = state.activeConditionId) {
+  const range = displayRangeForMetadata(metadata);
+  const span = Math.max(range.max - range.min, 1e-6);
+  const normalized = clamp((value - range.min) / span, 0, 1);
+  return rgbaString(interpolatePaletteColor(normalized, TEMPERATURE_PALETTES[oceanPaletteName(conditionId)]), 0.82);
+}
+
+function expandedViewportBbox() {
+  const [west, south, east, north] = visibleViewportBbox();
+  const lonPadding = Math.max((east - west) * 0.08, 0.15);
+  const latPadding = Math.max((north - south) * 0.08, 0.12);
+  return [west - lonPadding, south - latPadding, east + lonPadding, north + latPadding];
+}
+
+function scalarResolutionForZoom(zoom) {
+  if (zoom < 5) {
+    return { step: 4, subdivision: 1 };
+  }
+  if (zoom < 7) {
+    return { step: 3, subdivision: 1 };
+  }
+  if (zoom < 8.5) {
+    return { step: 2, subdivision: 1 };
+  }
+  if (zoom < 10.5) {
+    return { step: 1, subdivision: 1 };
+  }
+  if (zoom < 12.5) {
+    return { step: 1, subdivision: 2 };
+  }
+  return { step: 1, subdivision: 3 };
+}
+
+function vectorStrideForZoom(zoom) {
+  if (zoom < 5) {
+    return 8;
+  }
+  if (zoom < 7) {
+    return 6;
+  }
+  if (zoom < 9) {
+    return 4;
+  }
+  if (zoom < 11) {
+    return 3;
+  }
+  return 2;
+}
+
+function interpolateStructuredValue(latitude, longitude, latitudes, longitudes, grid) {
+  if (!Array.isArray(latitudes) || !Array.isArray(longitudes) || latitudes.length === 0 || longitudes.length === 0) {
+    return null;
+  }
+  const latMatch = latitudes.findIndex((value) => Number(value) >= latitude);
+  const row1 = latMatch === -1 ? latitudes.length - 1 : clamp(latMatch, 0, latitudes.length - 1);
+  const row0 = clamp(row1 > 0 ? row1 - 1 : row1, 0, latitudes.length - 1);
+  const lonMatch = longitudes.findIndex((value) => Number(value) >= longitude);
+  const col1 = lonMatch === -1 ? longitudes.length - 1 : clamp(lonMatch, 0, longitudes.length - 1);
+  const col0 = clamp(col1 > 0 ? col1 - 1 : col1, 0, longitudes.length - 1);
+
+  const rows = [...new Set([row0, row1])];
+  const cols = [...new Set([col0, col1])];
+  let weightedSum = 0;
+  let weightTotal = 0;
+
+  for (const rowIndex of rows) {
+    for (const columnIndex of cols) {
+      const value = numericGridValue(grid, rowIndex, columnIndex);
+      if (value === null) {
+        continue;
       }
-      continue;
+      const sampleLat = Number(latitudes[rowIndex]);
+      const sampleLon = Number(longitudes[columnIndex]);
+      const cosLatitude = Math.max(Math.cos((latitude * Math.PI) / 180), 0.2);
+      const distanceSquared = (sampleLat - latitude) ** 2 + ((sampleLon - longitude) * cosLatitude) ** 2;
+      if (distanceSquared < 1e-10) {
+        return value;
+      }
+      const weight = 1 / distanceSquared;
+      weightedSum += value * weight;
+      weightTotal += weight;
     }
+  }
 
-    state.map.addSource(sourceId, {
-      type: "image",
-      url,
-      coordinates
-    });
+  return weightTotal > 0 ? weightedSum / weightTotal : null;
+}
 
-    const beforeLayerId = state.map.getLayer("selected-location-ring") ? "selected-location-ring" : undefined;
-    state.map.addLayer(
-      {
-        id: sourceId,
-        type: "raster",
-        source: sourceId,
-        paint: {
-          "raster-opacity": oceanLayerVisible() ? 0.78 : 0,
-          "raster-fade-duration": 0
-        }
+function interpolateVectorAt(latitude, longitude, latitudes, longitudes, eastwardGrid, northwardGrid) {
+  const eastward = interpolateStructuredValue(latitude, longitude, latitudes, longitudes, eastwardGrid);
+  const northward = interpolateStructuredValue(latitude, longitude, latitudes, longitudes, northwardGrid);
+  if (eastward === null || northward === null) {
+    return null;
+  }
+  return { eastward, northward };
+}
+
+function ensureOceanSources() {
+  if (!state.map || state.map.getSource("ocean-scalar-source")) {
+    return;
+  }
+
+  const beforeLayerId = state.map.getLayer("selected-location-ring") ? "selected-location-ring" : undefined;
+  state.map.addSource("ocean-scalar-source", { type: "geojson", data: emptyFeatureCollection() });
+  state.map.addSource("ocean-shoreline-source", { type: "geojson", data: emptyFeatureCollection() });
+  state.map.addSource("ocean-vector-source", { type: "geojson", data: emptyFeatureCollection() });
+
+  state.map.addLayer(
+    {
+      id: "ocean-scalar-fill",
+      type: "fill",
+      source: "ocean-scalar-source",
+      paint: {
+        "fill-color": ["coalesce", ["get", "fillColor"], "rgba(0,0,0,0)"],
+        "fill-opacity": 0,
+        "fill-antialias": true
+      }
+    },
+    beforeLayerId
+  );
+  state.map.addLayer(
+    {
+      id: "ocean-shoreline",
+      type: "line",
+      source: "ocean-shoreline-source",
+      paint: {
+        "line-color": "#f1ead2",
+        "line-width": ["interpolate", ["linear"], ["zoom"], 4, 0.5, 10, 1.2, 14, 1.7],
+        "line-opacity": 0
       },
-      beforeLayerId
-    );
-    state.oceanTiles.sourceIds.add(sourceId);
+      layout: {
+        "line-join": "round",
+        "line-cap": "round"
+      }
+    },
+    beforeLayerId
+  );
+  state.map.addLayer(
+    {
+      id: "ocean-vector-shaft",
+      type: "line",
+      source: "ocean-vector-source",
+      filter: ["==", ["get", "kind"], "shaft"],
+      paint: {
+        "line-color": ["coalesce", ["get", "strokeColor"], "#eaf7ff"],
+        "line-width": ["coalesce", ["get", "strokeWidth"], 1.4],
+        "line-opacity": 0,
+        "line-dasharray": [1, 0]
+      },
+      layout: {
+        "line-join": "round",
+        "line-cap": "round"
+      }
+    },
+    beforeLayerId
+  );
+  state.map.addLayer(
+    {
+      id: "ocean-vector-head",
+      type: "line",
+      source: "ocean-vector-source",
+      filter: ["==", ["get", "kind"], "head"],
+      paint: {
+        "line-color": ["coalesce", ["get", "strokeColor"], "#f5fbff"],
+        "line-width": ["coalesce", ["get", "strokeWidth"], 1.4],
+        "line-opacity": 0
+      },
+      layout: {
+        "line-join": "round",
+        "line-cap": "round"
+      }
+    },
+    beforeLayerId
+  );
+}
+
+function updateOceanLayerStyles() {
+  if (!state.map?.getLayer("ocean-scalar-fill")) {
+    return;
   }
 
-  for (const sourceId of [...state.oceanTiles.sourceIds]) {
-    const key = sourceId.replace("ocean-tile-", "").replaceAll("-", ":");
-    if (nextKeys.has(key)) {
-      continue;
+  const mode = activeRenderModeId();
+  const scalarOpacity = oceanScalarLayerVisible() ? 0.78 : 0;
+  const shorelineOpacity = oceanLayerVisible() ? 0.72 : 0;
+  let shaftOpacity = 0;
+  let headOpacity = 0;
+  let dashArray = [1, 0];
+
+  if (oceanVectorLayerVisible()) {
+    if (mode === "arrows") {
+      shaftOpacity = 0.88;
+      headOpacity = 0.88;
+    } else if (mode === "particlesOnly" || mode === "streaksOnly") {
+      shaftOpacity = 0.9;
+      dashArray = [0.5, 1.4];
+    } else {
+      shaftOpacity = 0.72;
+      dashArray = [1, 0.9];
     }
-    if (state.map.getLayer(sourceId)) {
-      state.map.removeLayer(sourceId);
-    }
-    if (state.map.getSource(sourceId)) {
-      state.map.removeSource(sourceId);
-    }
-    state.oceanTiles.sourceIds.delete(sourceId);
   }
 
-  if (token === state.oceanTiles.requestToken) {
-    state.oceanTiles.levelId = level.id;
-    state.oceanTiles.activeKeys = nextKeys;
+  state.map.setPaintProperty("ocean-scalar-fill", "fill-opacity", scalarOpacity);
+  state.map.setPaintProperty("ocean-shoreline", "line-opacity", shorelineOpacity);
+  state.map.setPaintProperty("ocean-vector-shaft", "line-opacity", shaftOpacity);
+  state.map.setPaintProperty("ocean-vector-shaft", "line-dasharray", dashArray);
+  state.map.setPaintProperty("ocean-vector-head", "line-opacity", headOpacity);
+}
+
+function buildOceanRenderCollections(queryIndex, metadata, condition, frameIndex, zoom) {
+  const latitudes = queryIndex?.latitudes ?? [];
+  const longitudes = queryIndex?.longitudes ?? [];
+  const gridKey = metadata.query_value_key || condition.value_key || "values_celsius";
+  const frameGrid = queryIndex?.[gridKey]?.[frameIndex] ?? null;
+  if (!Array.isArray(frameGrid) || latitudes.length === 0 || longitudes.length === 0) {
+    return {
+      scalar: emptyFeatureCollection(),
+      shoreline: emptyFeatureCollection(),
+      vector: emptyFeatureCollection()
+    };
   }
+
+  const latEdges = buildCellEdges(latitudes);
+  const lonEdges = buildCellEdges(longitudes);
+  const [west, south, east, north] = expandedViewportBbox();
+  const rowStart = clamp(findIntervalIndex(latEdges, south), 0, latitudes.length - 1);
+  const rowEndExclusive = clamp(findIntervalIndex(latEdges, north) + 1, 1, latitudes.length);
+  const colStart = clamp(findIntervalIndex(lonEdges, west), 0, longitudes.length - 1);
+  const colEndExclusive = clamp(findIntervalIndex(lonEdges, east) + 1, 1, longitudes.length);
+  const scalarFeatures = [];
+  const shorelineFeatures = [];
+  const vectorFeatures = [];
+  const paletteConditionId = condition.id;
+
+  let { step, subdivision } = scalarResolutionForZoom(zoom);
+  let scalarEstimate =
+    Math.max(Math.ceil((rowEndExclusive - rowStart) / step), 1) *
+    Math.max(Math.ceil((colEndExclusive - colStart) / step), 1) *
+    subdivision *
+    subdivision;
+  while (scalarEstimate > 4200) {
+    if (subdivision > 1) {
+      subdivision -= 1;
+    } else {
+      step += 1;
+    }
+    scalarEstimate =
+      Math.max(Math.ceil((rowEndExclusive - rowStart) / step), 1) *
+      Math.max(Math.ceil((colEndExclusive - colStart) / step), 1) *
+      subdivision *
+      subdivision;
+  }
+
+  for (let rowIndex = rowStart; rowIndex < rowEndExclusive; rowIndex += step) {
+    const rowStop = Math.min(rowIndex + step, rowEndExclusive);
+    for (let columnIndex = colStart; columnIndex < colEndExclusive; columnIndex += step) {
+      const columnStop = Math.min(columnIndex + step, colEndExclusive);
+
+      if (step > 1) {
+        let total = 0;
+        let count = 0;
+        const totalCells = (rowStop - rowIndex) * (columnStop - columnIndex);
+        for (let coarseRow = rowIndex; coarseRow < rowStop; coarseRow += 1) {
+          for (let coarseColumn = columnIndex; coarseColumn < columnStop; coarseColumn += 1) {
+            const value = numericGridValue(frameGrid, coarseRow, coarseColumn);
+            if (value === null) {
+              continue;
+            }
+            total += value;
+            count += 1;
+          }
+        }
+        if (count === 0) {
+          continue;
+        }
+        if (count < totalCells) {
+          for (let coarseRow = rowIndex; coarseRow < rowStop; coarseRow += 1) {
+            for (let coarseColumn = columnIndex; coarseColumn < columnStop; coarseColumn += 1) {
+              const value = numericGridValue(frameGrid, coarseRow, coarseColumn);
+              if (value === null) {
+                continue;
+              }
+              scalarFeatures.push({
+                type: "Feature",
+                properties: {
+                  fillColor: valueToFillColor(value, metadata, paletteConditionId)
+                },
+                geometry: {
+                  type: "Polygon",
+                  coordinates: [[
+                    [lonEdges[coarseColumn], latEdges[coarseRow]],
+                    [lonEdges[coarseColumn + 1], latEdges[coarseRow]],
+                    [lonEdges[coarseColumn + 1], latEdges[coarseRow + 1]],
+                    [lonEdges[coarseColumn], latEdges[coarseRow + 1]],
+                    [lonEdges[coarseColumn], latEdges[coarseRow]]
+                  ]]
+                }
+              });
+            }
+          }
+          continue;
+        }
+
+        scalarFeatures.push({
+          type: "Feature",
+          properties: {
+            fillColor: valueToFillColor(total / count, metadata, paletteConditionId)
+          },
+          geometry: {
+            type: "Polygon",
+            coordinates: [[
+              [lonEdges[columnIndex], latEdges[rowIndex]],
+              [lonEdges[columnStop], latEdges[rowIndex]],
+              [lonEdges[columnStop], latEdges[rowStop]],
+              [lonEdges[columnIndex], latEdges[rowStop]],
+              [lonEdges[columnIndex], latEdges[rowIndex]]
+            ]]
+          }
+        });
+        continue;
+      }
+
+      if (numericGridValue(frameGrid, rowIndex, columnIndex) === null) {
+        continue;
+      }
+
+      const southEdge = latEdges[rowIndex];
+      const northEdge = latEdges[rowIndex + 1];
+      const westEdge = lonEdges[columnIndex];
+      const eastEdge = lonEdges[columnIndex + 1];
+      for (let subRow = 0; subRow < subdivision; subRow += 1) {
+        const subSouth = lerp(southEdge, northEdge, subRow / subdivision);
+        const subNorth = lerp(southEdge, northEdge, (subRow + 1) / subdivision);
+        for (let subColumn = 0; subColumn < subdivision; subColumn += 1) {
+          const subWest = lerp(westEdge, eastEdge, subColumn / subdivision);
+          const subEast = lerp(westEdge, eastEdge, (subColumn + 1) / subdivision);
+          const centerLatitude = (subSouth + subNorth) / 2;
+          const centerLongitude = (subWest + subEast) / 2;
+          const value = interpolateStructuredValue(centerLatitude, centerLongitude, latitudes, longitudes, frameGrid);
+          if (value === null) {
+            continue;
+          }
+          scalarFeatures.push({
+            type: "Feature",
+            properties: {
+              fillColor: valueToFillColor(value, metadata, paletteConditionId)
+            },
+            geometry: {
+              type: "Polygon",
+              coordinates: [[
+                [subWest, subSouth],
+                [subEast, subSouth],
+                [subEast, subNorth],
+                [subWest, subNorth],
+                [subWest, subSouth]
+              ]]
+            }
+          });
+        }
+      }
+    }
+  }
+
+  for (let rowIndex = rowStart; rowIndex < rowEndExclusive; rowIndex += 1) {
+    for (let columnIndex = colStart; columnIndex < colEndExclusive; columnIndex += 1) {
+      if (numericGridValue(frameGrid, rowIndex, columnIndex) === null) {
+        continue;
+      }
+      const southEdge = latEdges[rowIndex];
+      const northEdge = latEdges[rowIndex + 1];
+      const westEdge = lonEdges[columnIndex];
+      const eastEdge = lonEdges[columnIndex + 1];
+
+      if (rowIndex === 0 || numericGridValue(frameGrid, rowIndex - 1, columnIndex) === null) {
+        shorelineFeatures.push({
+          type: "Feature",
+          properties: {},
+          geometry: { type: "LineString", coordinates: [[westEdge, southEdge], [eastEdge, southEdge]] }
+        });
+      }
+      if (rowIndex === latitudes.length - 1 || numericGridValue(frameGrid, rowIndex + 1, columnIndex) === null) {
+        shorelineFeatures.push({
+          type: "Feature",
+          properties: {},
+          geometry: { type: "LineString", coordinates: [[westEdge, northEdge], [eastEdge, northEdge]] }
+        });
+      }
+      if (columnIndex === 0 || numericGridValue(frameGrid, rowIndex, columnIndex - 1) === null) {
+        shorelineFeatures.push({
+          type: "Feature",
+          properties: {},
+          geometry: { type: "LineString", coordinates: [[westEdge, southEdge], [westEdge, northEdge]] }
+        });
+      }
+      if (columnIndex === longitudes.length - 1 || numericGridValue(frameGrid, rowIndex, columnIndex + 1) === null) {
+        shorelineFeatures.push({
+          type: "Feature",
+          properties: {},
+          geometry: { type: "LineString", coordinates: [[eastEdge, southEdge], [eastEdge, northEdge]] }
+        });
+      }
+    }
+  }
+
+  const eastwardGrid =
+    condition.id === "currents"
+      ? componentFrame(queryIndex, "eastward_mps", frameIndex)
+      : componentFrame(queryIndex, "eastward_unit", frameIndex);
+  const northwardGrid =
+    condition.id === "currents"
+      ? componentFrame(queryIndex, "northward_mps", frameIndex)
+      : componentFrame(queryIndex, "northward_unit", frameIndex);
+
+  if (Array.isArray(eastwardGrid) && Array.isArray(northwardGrid)) {
+    let stride = vectorStrideForZoom(zoom);
+    let vectorEstimate =
+      Math.max(Math.ceil((rowEndExclusive - rowStart) / stride), 1) *
+      Math.max(Math.ceil((colEndExclusive - colStart) / stride), 1);
+    while (vectorEstimate > 900) {
+      stride += 1;
+      vectorEstimate =
+        Math.max(Math.ceil((rowEndExclusive - rowStart) / stride), 1) *
+        Math.max(Math.ceil((colEndExclusive - colStart) / stride), 1);
+    }
+
+    const range = displayRangeForMetadata(metadata);
+    const span = Math.max(range.max - range.min, 1e-6);
+    for (let rowIndex = rowStart; rowIndex < rowEndExclusive; rowIndex += stride) {
+      for (let columnIndex = colStart; columnIndex < colEndExclusive; columnIndex += stride) {
+        if (numericGridValue(frameGrid, rowIndex, columnIndex) === null) {
+          continue;
+        }
+
+        const centerLatitude = Number(latitudes[rowIndex]);
+        const centerLongitude = Number(longitudes[columnIndex]);
+        const vector = interpolateVectorAt(centerLatitude, centerLongitude, latitudes, longitudes, eastwardGrid, northwardGrid);
+        if (!vector) {
+          continue;
+        }
+        const magnitude = condition.id === "currents" ? Math.hypot(vector.eastward, vector.northward) : Math.max(numericGridValue(frameGrid, rowIndex, columnIndex) ?? 0, 0);
+        if (!Number.isFinite(magnitude) || magnitude <= 0.0001) {
+          continue;
+        }
+
+        const directionScale = clamp((magnitude - range.min) / span, 0.15, 1);
+        const lengthDegrees = 0.32 * directionScale * Math.max(latEdges[rowIndex + 1] - latEdges[rowIndex], 0.02);
+        const vectorMagnitude = Math.hypot(vector.eastward, vector.northward);
+        if (!Number.isFinite(vectorMagnitude) || vectorMagnitude <= 1e-6) {
+          continue;
+        }
+        const eastwardUnit = vector.eastward / vectorMagnitude;
+        const northwardUnit = vector.northward / vectorMagnitude;
+        const cosLatitude = Math.max(Math.cos((centerLatitude * Math.PI) / 180), 0.2);
+        const deltaLatitude = northwardUnit * lengthDegrees;
+        const deltaLongitude = (eastwardUnit * lengthDegrees) / cosLatitude;
+        const start = [centerLongitude - deltaLongitude / 2, centerLatitude - deltaLatitude / 2];
+        const end = [centerLongitude + deltaLongitude / 2, centerLatitude + deltaLatitude / 2];
+        const normalizedMagnitude = clamp((magnitude - range.min) / span, 0, 1);
+        const strokeColor = rgbaString(interpolatePaletteColor(normalizedMagnitude, TEMPERATURE_PALETTES[oceanPaletteName(condition.id)]), 0.94);
+        const strokeWidth = 1 + normalizedMagnitude * 1.6;
+
+        vectorFeatures.push({
+          type: "Feature",
+          properties: {
+            kind: "shaft",
+            strokeColor,
+            strokeWidth
+          },
+          geometry: {
+            type: "LineString",
+            coordinates: [start, end]
+          }
+        });
+
+        const heading = Math.atan2(northwardUnit, eastwardUnit);
+        const headLength = lengthDegrees * 0.28;
+        const leftAngle = heading + Math.PI - 0.55;
+        const rightAngle = heading + Math.PI + 0.55;
+        const leftPoint = [
+          end[0] + (Math.cos(leftAngle) * headLength) / cosLatitude,
+          end[1] + Math.sin(leftAngle) * headLength
+        ];
+        const rightPoint = [
+          end[0] + (Math.cos(rightAngle) * headLength) / cosLatitude,
+          end[1] + Math.sin(rightAngle) * headLength
+        ];
+        vectorFeatures.push({
+          type: "Feature",
+          properties: {
+            kind: "head",
+            strokeColor,
+            strokeWidth
+          },
+          geometry: {
+            type: "LineString",
+            coordinates: [leftPoint, end, rightPoint]
+          }
+        });
+      }
+    }
+  }
+
+  return {
+    scalar: { type: "FeatureCollection", features: scalarFeatures },
+    shoreline: { type: "FeatureCollection", features: shorelineFeatures },
+    vector: { type: "FeatureCollection", features: vectorFeatures }
+  };
+}
+
+function setGeoJsonSourceData(sourceId, payload) {
+  const source = state.map?.getSource(sourceId);
+  if (source && typeof source.setData === "function") {
+    source.setData(payload);
+  }
+}
+
+async function refreshOceanVisuals() {
+  if (!state.map) {
+    return;
+  }
+
+  ensureOceanSources();
+  updateOceanLayerStyles();
+  if (!oceanLayerVisible()) {
+    setGeoJsonSourceData("ocean-scalar-source", emptyFeatureCollection());
+    setGeoJsonSourceData("ocean-shoreline-source", emptyFeatureCollection());
+    setGeoJsonSourceData("ocean-vector-source", emptyFeatureCollection());
+    return;
+  }
+
+  const token = ++state.oceanVisuals.requestToken;
+  const queryIndex = await loadActiveQueryIndex();
+  if (token !== state.oceanVisuals.requestToken || !queryIndex) {
+    return;
+  }
+
+  const metadata = activeConditionMetadata();
+  const condition = activeConditionDefinition();
+  if (!metadata || !condition) {
+    return;
+  }
+
+  const frameIndex = Math.min(state.activeFrameIndex, Math.max((queryIndex.times_utc || []).length - 1, 0));
+  const collections = buildOceanRenderCollections(queryIndex, metadata, condition, frameIndex, state.map.getZoom());
+  if (token !== state.oceanVisuals.requestToken) {
+    return;
+  }
+
+  setGeoJsonSourceData("ocean-scalar-source", collections.scalar);
+  setGeoJsonSourceData("ocean-shoreline-source", collections.shoreline);
+  setGeoJsonSourceData("ocean-vector-source", collections.vector);
+  updateOceanLayerStyles();
 }
 
 function nearestIndex(values, target) {
@@ -862,18 +1422,23 @@ async function fetchOceanSample(latitude, longitude) {
   const latitudes = queryIndex.latitudes || [];
   const longitudes = queryIndex.longitudes || [];
   const frameIndex = Math.min(state.activeFrameIndex, Math.max((queryIndex.times_utc || []).length - 1, 0));
-  const rowIndex = nearestIndex(latitudes, latitude);
-  const columnIndex = nearestIndex(longitudes, longitude);
   const gridKey = metadata.query_value_key || condition.value_key || "values_celsius";
   const values = queryIndex[gridKey] || queryIndex.values_celsius;
-  const primaryValue = values?.[frameIndex]?.[rowIndex]?.[columnIndex] ?? null;
+  const frameGrid = values?.[frameIndex] ?? null;
+  const latEdges = buildCellEdges(latitudes);
+  const lonEdges = buildCellEdges(longitudes);
+  const rowIndex = clamp(findIntervalIndex(latEdges, latitude), 0, Math.max(latitudes.length - 1, 0));
+  const columnIndex = clamp(findIntervalIndex(lonEdges, longitude), 0, Math.max(longitudes.length - 1, 0));
+  const cellValue = frameGrid ? numericGridValue(frameGrid, rowIndex, columnIndex) : null;
+  const primaryValue =
+    frameGrid && cellValue !== null ? interpolateStructuredValue(latitude, longitude, latitudes, longitudes, frameGrid) : null;
 
   const payload = {
     condition_id: state.activeConditionId,
     frame_index: frameIndex,
     time_utc: queryIndex.times_utc?.[frameIndex] || currentFrame()?.time_utc || null,
-    cell_latitude: latitudes[rowIndex] ?? null,
-    cell_longitude: longitudes[columnIndex] ?? null,
+    cell_latitude: cellValue === null ? null : latitudes[rowIndex] ?? null,
+    cell_longitude: cellValue === null ? null : longitudes[columnIndex] ?? null,
     primary_value: primaryValue,
     primary_unit: condition.units || "",
     note: primaryValue === null ? "No water cell at this location" : null
@@ -2103,6 +2668,7 @@ function applyNightMode(frame) {
 
 function addOceanLayers() {
   const metadata = activeConditionMetadata();
+  ensureOceanSources();
   if (!metadata?.fallback || state.map.getSource("land-mask")) {
     return;
   }
@@ -2123,7 +2689,9 @@ function addOceanLayers() {
     source: "land-mask",
     paint: { "raster-opacity": state.satelliteWorking ? 0.03 : 0.98, "raster-fade-duration": 0 }
   });
-  refreshOceanTiles();
+  refreshOceanVisuals().catch((error) => {
+    console.error(error);
+  });
 }
 
 function ensureSelectedLocationLayer() {
@@ -2189,7 +2757,9 @@ function updateOverlayFrame() {
     return;
   }
   applyNightMode(frame);
-  refreshOceanTiles();
+  refreshOceanVisuals().catch((error) => {
+    console.error(error);
+  });
   updateChrome();
   setOceanVisibility();
   updateSelectedLocationValues().catch((error) => {
@@ -2198,11 +2768,7 @@ function updateOverlayFrame() {
 }
 
 function setOceanVisibility() {
-  for (const sourceId of state.oceanTiles.sourceIds) {
-    if (state.map?.getLayer(sourceId)) {
-      state.map.setPaintProperty(sourceId, "raster-opacity", oceanLayerVisible() ? 0.78 : 0);
-    }
-  }
+  updateOceanLayerStyles();
   updateChrome();
 }
 
@@ -2246,39 +2812,34 @@ function renderOceanRenderModes() {
     return;
   }
 
-  if (!["currents", "waves"].includes(state.activeConditionId)) {
+  const modes = renderModeOptions();
+  if (modes.length === 0) {
     oceanConditionRenderModeListEl.hidden = true;
     oceanConditionRenderModeListEl.innerHTML = "";
     return;
   }
 
-  const modes =
-    state.activeConditionId === "currents"
-      ? [
-          { label: "Speed + particles", selected: true },
-          { label: "Particles only", selected: false },
-          { label: "Arrows", selected: false }
-        ]
-      : [
-          { label: "Height + streaks", selected: true },
-          { label: "Streaks only", selected: false },
-          { label: "Arrows", selected: false }
-        ];
-
   oceanConditionRenderModeListEl.hidden = false;
   oceanConditionRenderModeListEl.innerHTML = modes
     .map(
       (mode) => `
-        <button class="infrastructure-category-toggle${mode.selected ? " is-selected" : ""}" type="button" disabled>
+        <button class="infrastructure-category-toggle${activeRenderModeId() === mode.id ? " is-selected" : ""}" type="button" data-render-mode="${mode.id}">
           <span class="infrastructure-category-main">
-            <span class="layer-tick">${mode.selected ? "✓" : ""}</span>
+            <span class="layer-tick">${activeRenderModeId() === mode.id ? "✓" : ""}</span>
             <span>${mode.label}</span>
           </span>
-          <span class="infrastructure-category-meta">Planned</span>
+          <span class="infrastructure-category-meta">${state.activeConditionId === "currents" ? "Current field" : "Wave field"}</span>
         </button>
       `
     )
     .join("");
+  oceanConditionRenderModeListEl.querySelectorAll("[data-render-mode]").forEach((button) => {
+    button.addEventListener("click", () => {
+      state.oceanRenderModes[state.activeConditionId] = button.dataset.renderMode;
+      renderOceanRenderModes();
+      updateOverlayFrame();
+    });
+  });
 }
 
 function updateLayerToggleUi() {
@@ -2493,11 +3054,15 @@ function registerInteractions(maplibregl) {
   });
 
   state.map.on("moveend", () => {
-    refreshOceanTiles();
+    refreshOceanVisuals().catch((error) => {
+      console.error(error);
+    });
   });
 
   state.map.on("zoomend", () => {
-    refreshOceanTiles();
+    refreshOceanVisuals().catch((error) => {
+      console.error(error);
+    });
   });
 }
 

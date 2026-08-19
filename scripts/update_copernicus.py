@@ -62,6 +62,7 @@ class FrameBundle:
     latitudes: np.ndarray
     longitudes: np.ndarray
     values: np.ndarray
+    components: dict[str, np.ndarray]
     min_value: float
     max_value: float
     original_units: str
@@ -262,14 +263,14 @@ def _surface_dataarray(dataset: xr.Dataset, variable_name: str) -> xr.DataArray:
     return data.squeeze(drop=False)
 
 
-def _extract_values(dataset: xr.Dataset, config: dict[str, Any]) -> tuple[np.ndarray, str, bool, str]:
+def _extract_values(dataset: xr.Dataset, config: dict[str, Any]) -> tuple[np.ndarray, dict[str, np.ndarray], str, bool, str]:
     processor = config["processor"]
 
     if processor == "temperature":
         data = _surface_stack(dataset)
         values, original_units, converted_from_kelvin = _to_celsius(data)
         timestamp_iso = _normalize_timestamp(_time_coord_values(data["time"].values)[0])
-        return values[0] if values.ndim == 3 else values, original_units, converted_from_kelvin, timestamp_iso
+        return values[0] if values.ndim == 3 else values, {}, original_units, converted_from_kelvin, timestamp_iso
 
     if processor == "currents":
         u_data = _surface_dataarray(dataset, "uo")
@@ -282,14 +283,45 @@ def _extract_values(dataset: xr.Dataset, config: dict[str, Any]) -> tuple[np.nda
             v_values = v_values[0]
         values = np.sqrt(np.square(u_values) + np.square(v_values))
         timestamp_iso = _normalize_timestamp(_time_coord_values(u_data["time"].values)[0])
-        return values, str(u_data.attrs.get("units", config["units"])) or config["units"], False, timestamp_iso
+        components = {
+            "eastward_mps": u_values,
+            "northward_mps": v_values,
+        }
+        return values, components, str(u_data.attrs.get("units", config["units"])) or config["units"], False, timestamp_iso
+
+    if processor == "waves":
+        height_data = _surface_dataarray(dataset, "VHM0")
+        direction_data = _surface_dataarray(dataset, "VMDR")
+        period_data = _surface_dataarray(dataset, "VTM10")
+        height_values = height_data.values.astype(np.float32)
+        direction_from = direction_data.values.astype(np.float32)
+        period_values = period_data.values.astype(np.float32)
+        if height_values.ndim == 3:
+            height_values = height_values[0]
+        if direction_from.ndim == 3:
+            direction_from = direction_from[0]
+        if period_values.ndim == 3:
+            period_values = period_values[0]
+        direction_to = np.mod(direction_from + 180.0, 360.0).astype(np.float32)
+        direction_radians = np.deg2rad(direction_to.astype(np.float64))
+        eastward_unit = np.sin(direction_radians).astype(np.float32)
+        northward_unit = np.cos(direction_radians).astype(np.float32)
+        timestamp_iso = _normalize_timestamp(_time_coord_values(height_data["time"].values)[0])
+        components = {
+            "direction_from_degrees": direction_from,
+            "direction_to_degrees": direction_to,
+            "eastward_unit": eastward_unit,
+            "northward_unit": northward_unit,
+            "mean_period_seconds": period_values,
+        }
+        return height_values, components, str(height_data.attrs.get("units", config["units"])) or config["units"], False, timestamp_iso
 
     data = _surface_dataarray(dataset, str(config["primary_variable"]))
     values = data.values.astype(np.float32)
     if values.ndim == 3:
         values = values[0]
     timestamp_iso = _normalize_timestamp(_time_coord_values(data["time"].values)[0])
-    return values, str(data.attrs.get("units", config["units"])) or config["units"], False, timestamp_iso
+    return values, {}, str(data.attrs.get("units", config["units"])) or config["units"], False, timestamp_iso
 
 
 def _validate_frame(
@@ -371,14 +403,16 @@ def _download_timestamp(
             lon_name = _find_coordinate_name(dataset, ["longitude", "lon"])
             latitudes = dataset[lat_name].values.astype(np.float64)
             longitudes = dataset[lon_name].values.astype(np.float64)
-            values, original_units, converted_from_kelvin, detected_time = _extract_values(dataset, config)
+            values, components, original_units, converted_from_kelvin, detected_time = _extract_values(dataset, config)
 
         if latitudes[0] > latitudes[-1]:
             latitudes = latitudes[::-1]
             values = values[::-1, :]
+            components = {name: component[::-1, :] for name, component in components.items()}
         if longitudes[0] > longitudes[-1]:
             longitudes = longitudes[::-1]
             values = values[:, ::-1]
+            components = {name: component[:, ::-1] for name, component in components.items()}
 
         _validate_frame(config, timestamp_iso, detected_time, latitudes, longitudes, values)
         valid_values = values[np.isfinite(values)]
@@ -388,6 +422,7 @@ def _download_timestamp(
             latitudes=latitudes,
             longitudes=longitudes,
             values=values,
+            components=components,
             min_value=round(float(valid_values.min()), 3),
             max_value=round(float(valid_values.max()), 3),
             original_units=original_units,
@@ -417,6 +452,15 @@ def _restore_frames(
         timestamp_iso: previous_query_index[values_key][index]
         for index, timestamp_iso in enumerate(previous_query_index.get("times_utc", []))
     }
+    component_payload = previous_query_index.get("components", {})
+    components_by_time = {
+        timestamp_iso: {
+            name: np.array(series[index], dtype=np.float32)
+            for name, series in component_payload.items()
+            if index < len(series)
+        }
+        for index, timestamp_iso in enumerate(previous_query_index.get("times_utc", []))
+    }
     frames_by_time = {frame["time_utc"]: frame for frame in previous_metadata.get("frames", [])}
 
     restored: list[FrameBundle] = []
@@ -425,6 +469,7 @@ def _restore_frames(
             continue
         grid = np.array(values_by_time[timestamp_iso], dtype=np.float32)
         valid_values = grid[np.isfinite(grid)]
+        components = components_by_time.get(timestamp_iso, {})
         restored.append(
             FrameBundle(
                 key=frames_by_time[timestamp_iso]["key"],
@@ -432,6 +477,7 @@ def _restore_frames(
                 latitudes=latitudes,
                 longitudes=longitudes,
                 values=grid,
+                components=components,
                 min_value=round(float(valid_values.min()), 3),
                 max_value=round(float(valid_values.max()), 3),
                 original_units=previous_metadata.get("provenance", {}).get("original_units", config["units"]),
@@ -608,6 +654,7 @@ def _build_condition_outputs(
             for palette_name, values in palette_sizes.items()
         }
 
+    component_names = sorted({name for frame in frames for name in frame.components.keys()})
     query_index_payload = {
         "latitudes": [round(float(value), 6) for value in latitudes.tolist()],
         "longitudes": [round(float(value), 6) for value in longitudes.tolist()],
@@ -620,6 +667,16 @@ def _build_condition_outputs(
             ]
             for frame in frames
         ],
+        "components": {
+            component_name: [
+                [
+                    [None if not np.isfinite(value) else round(float(value), 4) for value in row]
+                    for row in frame.components.get(component_name, np.full(frame.values.shape, np.nan, dtype=np.float32)).tolist()
+                ]
+                for frame in frames
+            ]
+            for component_name in component_names
+        },
     }
     (condition_root / QUERY_INDEX_NAME).write_text(json.dumps(query_index_payload), encoding="utf-8")
 
