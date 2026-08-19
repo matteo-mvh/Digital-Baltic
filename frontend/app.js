@@ -681,17 +681,8 @@ function lerp(start, end, ratio) {
   return start + (end - start) * ratio;
 }
 
-function oceanPaletteName(conditionId = state.activeConditionId) {
-  if (conditionId === "temperature") {
-    return state.palette;
-  }
-  if (conditionId === "salinity" || conditionId === "waves") {
-    return "yellowBlue";
-  }
-  if (conditionId === "currents" || conditionId === "oxygen") {
-    return "greenRed";
-  }
-  return "blueRed";
+function oceanPaletteName() {
+  return state.palette;
 }
 
 function renderModeOptions(conditionId = state.activeConditionId) {
@@ -2434,19 +2425,19 @@ function updateLegendAppearance() {
   document.querySelectorAll(".legend-bar, .timeline-legend-bar").forEach((element) => {
     element.style.background = gradient;
   });
-  if (oceanConditionLegendBarEl && state.activeConditionId === "temperature") {
+  if (oceanConditionLegendBarEl && state.activeConditionId) {
     oceanConditionLegendBarEl.style.background = gradient;
   }
 }
 
 function updatePaletteButtons() {
-  const temperatureActive = state.activeConditionId === "temperature";
+  const oceanConditionActive = Boolean(state.activeConditionId);
   for (const button of paletteOptionEls) {
     button.classList.toggle("is-selected", button.dataset.palette === state.palette);
-    button.disabled = !temperatureActive;
+    button.disabled = !oceanConditionActive;
   }
-  paletteButtonEl.disabled = !temperatureActive;
-  paletteCurrentEl.textContent = temperatureActive ? t("accessibility.scaleButton", "Colorscale") : "Fixed colors";
+  paletteButtonEl.disabled = !oceanConditionActive;
+  paletteCurrentEl.textContent = t("accessibility.scaleButton", "Colorscale");
   for (const preview of palettePreviewEls) {
     const paletteName = preview.dataset.palettePreview;
     const palette = TEMPERATURE_PALETTES[paletteName] ?? TEMPERATURE_PALETTES.blueRed;
@@ -2555,9 +2546,7 @@ function updateChrome() {
   }
 
   oceanConditionLegendTitleEl.textContent =
-    state.activeConditionId === "temperature"
-      ? `${condition.label} · ${t(getPaletteDefinition().labelKey, getPaletteDefinition().fallbackLabel)}`
-      : condition.label;
+    `${condition.label} · ${t(getPaletteDefinition().labelKey, getPaletteDefinition().fallbackLabel)}`;
   oceanConditionLegendRangeEl.textContent =
     typeof frameMin === "number" && typeof frameMax === "number" ? `${frameMin.toFixed(1)} to ${frameMax.toFixed(1)}` : "";
   oceanConditionLegendMinEl.textContent = typeof valueRange?.display_min === "number" ? valueRange.display_min.toFixed(1) : "";
