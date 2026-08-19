@@ -1,9 +1,12 @@
 from __future__ import annotations
 
 import json
+import os
 import shutil
 import sys
 from pathlib import Path
+from urllib import error as urlerror
+from urllib import request as urlrequest
 
 if __package__ in {None, ""}:
     sys.path.append(str(Path(__file__).resolve().parents[1]))
@@ -11,6 +14,7 @@ if __package__ in {None, ""}:
 from data_pipeline.config import (
     BALTIC_REGION,
     FRONTEND_DIR,
+    SITE_URL_ENV_VAR,
     SITE_DATA_ROOT,
     SITE_DIR,
 )
@@ -21,6 +25,74 @@ def _copy_tree(source: Path, target: Path) -> None:
     if not source.exists():
         return
     shutil.copytree(source, target, dirs_exist_ok=True)
+
+
+def _fetch_bytes(url: str) -> bytes | None:
+    request = urlrequest.Request(
+        url,
+        headers={
+            "User-Agent": "Digital-Baltic-Build/1.0",
+            "Cache-Control": "no-cache",
+            "Pragma": "no-cache",
+        },
+    )
+    try:
+        with urlrequest.urlopen(request, timeout=20) as response:
+            if getattr(response, "status", 200) >= 400:
+                return None
+            return response.read()
+    except (urlerror.HTTPError, urlerror.URLError):
+        return None
+
+
+def _restore_remote_ocean_data(data_target: Path) -> bool:
+    site_url = os.getenv(SITE_URL_ENV_VAR, "").rstrip("/")
+    if not site_url:
+        return False
+
+    manifest_url = f"{site_url}/data/ocean/manifest.json?source=build-site"
+    manifest_bytes = _fetch_bytes(manifest_url)
+    if not manifest_bytes:
+        return False
+
+    try:
+        manifest = json.loads(manifest_bytes.decode("utf-8"))
+    except json.JSONDecodeError:
+        return False
+
+    ocean_root = data_target / "ocean"
+    ocean_root.mkdir(parents=True, exist_ok=True)
+    (ocean_root / "manifest.json").write_bytes(manifest_bytes)
+
+    restored_any = False
+    for condition in manifest.get("conditions", []):
+        metadata = condition.get("metadata")
+        condition_id = condition.get("id")
+        if not metadata or not condition_id:
+            continue
+
+        condition_root = ocean_root / str(condition_id)
+        condition_root.mkdir(parents=True, exist_ok=True)
+
+        files_to_restore = {
+            "manifest.json": metadata.get("files", {}).get("metadata_url"),
+            "query_index.json": metadata.get("query_index_url"),
+            "land_mask.png": metadata.get("fallback", {}).get("land_mask_url"),
+        }
+        restored_condition = True
+        for filename, relative_url in files_to_restore.items():
+            if not relative_url:
+                restored_condition = False
+                continue
+            remote_url = f"{site_url}/{str(relative_url).lstrip('./')}?source=build-site"
+            payload = _fetch_bytes(remote_url)
+            if payload is None:
+                restored_condition = False
+                continue
+            (condition_root / filename).write_bytes(payload)
+        restored_any = restored_any or restored_condition
+
+    return restored_any
 
 
 def _placeholder_manifest() -> dict[str, object]:
@@ -65,6 +137,8 @@ def build_site() -> None:
     data_target = SITE_DIR / "data"
     if SITE_DATA_ROOT.exists():
         _copy_tree(SITE_DATA_ROOT, data_target)
+    else:
+        _restore_remote_ocean_data(data_target)
 
     manifest_path = data_target / "ocean" / "manifest.json"
     manifest_path.parent.mkdir(parents=True, exist_ok=True)
