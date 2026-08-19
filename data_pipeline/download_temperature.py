@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import argparse
 import json
+import os
 import sys
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
@@ -32,9 +33,26 @@ from data_pipeline.process_temperature import process_temperature_dataset
 FORECAST_HORIZON = timedelta(days=2)
 
 
-def _available_times() -> pd.DatetimeIndex:
-    remote = copernicusmarine.open_dataset(dataset_id=DATASET_ID)
+def _copernicus_credentials() -> tuple[str, str]:
+    username = os.getenv("COPERNICUSMARINE_SERVICE_USERNAME") or os.getenv("COPERNICUS_USERNAME")
+    password = os.getenv("COPERNICUSMARINE_SERVICE_PASSWORD") or os.getenv("COPERNICUS_PASSWORD")
+    if not username or not password:
+        raise RuntimeError(
+            "Missing Copernicus credentials. Set COPERNICUSMARINE_SERVICE_USERNAME/COPERNICUSMARINE_SERVICE_PASSWORD"
+            " or COPERNICUS_USERNAME/COPERNICUS_PASSWORD."
+        )
+    return username, password
+
+
+def _available_times(username: str, password: str) -> pd.DatetimeIndex:
+    remote = copernicusmarine.open_dataset(
+        dataset_id=DATASET_ID,
+        username=username,
+        password=password,
+    )
     try:
+        if remote is None:
+            raise RuntimeError(f"Copernicus returned no dataset for {DATASET_ID}. Check credentials and dataset access.")
         if "time" not in remote.coords:
             raise RuntimeError(f"Dataset {DATASET_ID} does not expose a time coordinate.")
         return pd.to_datetime(remote["time"].values, utc=True)
@@ -85,7 +103,8 @@ def download_temperature_window(run_processing: bool = True) -> None:
     load_dotenv()
     ensure_directories()
 
-    available_times = _available_times()
+    username, password = _copernicus_credentials()
+    available_times = _available_times(username, password)
     start_time, end_time, selected_times = _select_time_window(available_times)
     raw_path = raw_dataset_path()
 
@@ -96,6 +115,8 @@ def download_temperature_window(run_processing: bool = True) -> None:
 
     copernicusmarine.subset(
         dataset_id=DATASET_ID,
+        username=username,
+        password=password,
         variables=[TEMPERATURE_VARIABLE],
         start_datetime=start_time.isoformat(),
         end_datetime=end_time.isoformat(),

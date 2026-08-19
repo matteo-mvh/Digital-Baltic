@@ -47,6 +47,8 @@ jobs:
         env:
           COPERNICUS_USERNAME: ${{ secrets.COPERNICUS_USERNAME }}
           COPERNICUS_PASSWORD: ${{ secrets.COPERNICUS_PASSWORD }}
+          COPERNICUSMARINE_SERVICE_USERNAME: ${{ secrets.COPERNICUS_USERNAME }}
+          COPERNICUSMARINE_SERVICE_PASSWORD: ${{ secrets.COPERNICUS_PASSWORD }}
           DIGITAL_BALTIC_SITE_URL: ${{ env.DIGITAL_BALTIC_SITE_URL }}
         run: python scripts/update_copernicus.py
 

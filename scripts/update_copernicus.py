@@ -70,6 +70,12 @@ class FrameBundle:
     source: str
 
 
+@dataclass(frozen=True)
+class CopernicusCredentials:
+    username: str
+    password: str
+
+
 def _log(message: str) -> None:
     print(message, flush=True)
 
@@ -112,18 +118,21 @@ def _resolve_site_url(value: str | None) -> str | None:
     return candidate.rstrip("/")
 
 
-def _ensure_copernicus_environment() -> None:
+def _get_copernicus_credentials() -> CopernicusCredentials:
     username = next((os.getenv(name) for name in COPERNICUS_USERNAME_ENV_VARS if os.getenv(name)), None)
     password = next((os.getenv(name) for name in COPERNICUS_PASSWORD_ENV_VARS if os.getenv(name)), None)
     if not username or not password:
         raise RuntimeError(
             "Missing Copernicus credentials. Add COPERNICUS_USERNAME and COPERNICUS_PASSWORD as environment variables."
         )
+    return CopernicusCredentials(username=username, password=password)
 
-    os.environ.setdefault("COPERNICUS_USERNAME", username)
-    os.environ.setdefault("COPERNICUS_PASSWORD", password)
-    os.environ.setdefault("COPERNICUSMARINE_SERVICE_USERNAME", username)
-    os.environ.setdefault("COPERNICUSMARINE_SERVICE_PASSWORD", password)
+
+def _ensure_copernicus_environment(credentials: CopernicusCredentials) -> None:
+    os.environ.setdefault("COPERNICUS_USERNAME", credentials.username)
+    os.environ.setdefault("COPERNICUS_PASSWORD", credentials.password)
+    os.environ.setdefault("COPERNICUSMARINE_SERVICE_USERNAME", credentials.username)
+    os.environ.setdefault("COPERNICUSMARINE_SERVICE_PASSWORD", credentials.password)
 
 
 def _previous_condition_state(
@@ -152,9 +161,15 @@ def _previous_condition_state(
     return metadata, query_index
 
 
-def _available_times(dataset_id: str) -> pd.DatetimeIndex:
-    remote = copernicusmarine.open_dataset(dataset_id=dataset_id)
+def _available_times(dataset_id: str, credentials: CopernicusCredentials) -> pd.DatetimeIndex:
+    remote = copernicusmarine.open_dataset(
+        dataset_id=dataset_id,
+        username=credentials.username,
+        password=credentials.password,
+    )
     try:
+        if remote is None:
+            raise RuntimeError(f"Copernicus returned no dataset for {dataset_id}. Check credentials and dataset access.")
         if "time" not in remote.coords:
             raise RuntimeError(f"Dataset {dataset_id} does not expose a time coordinate.")
         return pd.to_datetime(remote["time"].values, utc=True)
@@ -246,7 +261,12 @@ def _validate_frame(
         raise ValueError(f"Downloaded timestamp {detected_time} does not match requested time {requested_time}.")
 
 
-def _download_timestamp(config: dict[str, Any], timestamp_iso: str, download_root: Path) -> FrameBundle:
+def _download_timestamp(
+    config: dict[str, Any],
+    timestamp_iso: str,
+    download_root: Path,
+    credentials: CopernicusCredentials,
+) -> FrameBundle:
     frame_key = _frame_key(timestamp_iso)
     condition_root = download_root / config["id"]
     condition_root.mkdir(parents=True, exist_ok=True)
@@ -254,6 +274,8 @@ def _download_timestamp(config: dict[str, Any], timestamp_iso: str, download_roo
 
     copernicusmarine.subset(
         dataset_id=config["dataset_id"],
+        username=credentials.username,
+        password=credentials.password,
         variables=list(config["variables"]),
         start_datetime=timestamp_iso,
         end_datetime=timestamp_iso,
@@ -682,9 +704,14 @@ def _write_root_manifest(available_metadata: dict[str, dict[str, Any]]) -> None:
     )
 
 
-def _update_condition(config: dict[str, Any], site_url: str | None, force_full_refresh: bool) -> dict[str, Any] | None:
+def _update_condition(
+    config: dict[str, Any],
+    site_url: str | None,
+    force_full_refresh: bool,
+    credentials: CopernicusCredentials,
+) -> dict[str, Any] | None:
     previous_metadata, previous_query_index = _previous_condition_state(config["id"], site_url)
-    available_times = _available_times(str(config["dataset_id"]))
+    available_times = _available_times(str(config["dataset_id"]), credentials)
     desired_times = _desired_times(config, available_times)
     existing_times = set(previous_metadata.get("availableTimes", [])) if previous_metadata else set()
 
@@ -715,7 +742,7 @@ def _update_condition(config: dict[str, Any], site_url: str | None, force_full_r
     for timestamp_iso in desired_times:
         if timestamp_iso not in refresh_times:
             continue
-        frame = _download_timestamp(config, timestamp_iso, download_root)
+        frame = _download_timestamp(config, timestamp_iso, download_root, credentials)
         downloaded_frames.append(frame)
         _log(f"{config['label']}: processed {frame.time_utc}")
 
@@ -736,7 +763,8 @@ def _update_condition(config: dict[str, Any], site_url: str | None, force_full_r
 
 def update_all_conditions(site_url: str | None, force_full_refresh: bool = False) -> None:
     load_dotenv()
-    _ensure_copernicus_environment()
+    credentials = _get_copernicus_credentials()
+    _ensure_copernicus_environment(credentials)
     if TEMPORARY_WORK_ROOT.exists():
         shutil.rmtree(TEMPORARY_WORK_ROOT)
     TEMPORARY_WORK_ROOT.mkdir(parents=True, exist_ok=True)
@@ -747,7 +775,7 @@ def update_all_conditions(site_url: str | None, force_full_refresh: bool = False
         if not config:
             continue
         try:
-            metadata = _update_condition(config, site_url, force_full_refresh)
+            metadata = _update_condition(config, site_url, force_full_refresh, credentials)
             if metadata:
                 available_metadata[condition_id] = metadata
         except Exception as exc:
