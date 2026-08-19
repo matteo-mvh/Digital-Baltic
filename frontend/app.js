@@ -49,6 +49,11 @@ const infrastructureToggleEl = document.getElementById("infrastructure-toggle");
 const infrastructurePanelEl = document.getElementById("infrastructure-panel");
 const infrastructureCategoryListEl = document.getElementById("infrastructure-category-list");
 const infrastructureLegendEl = document.getElementById("infrastructure-legend");
+const overlayInfoPanelEl = document.getElementById("overlay-info-panel");
+const overlayInfoTitleEl = document.getElementById("overlay-info-title");
+const overlayInfoSubtitleEl = document.getElementById("overlay-info-subtitle");
+const overlayInfoBodyEl = document.getElementById("overlay-info-body");
+const overlayInfoCloseEl = document.getElementById("overlay-info-close");
 const mapBottomLeftEl = document.getElementById("map-bottom-left");
 const activeOverlayControlsEl = document.getElementById("active-overlay-controls");
 const timeSliderEl = document.getElementById("time-slider");
@@ -87,6 +92,7 @@ const statusMessageEl = document.getElementById("status-message");
 const paletteOptionEls = Array.from(document.querySelectorAll("[data-palette]"));
 const palettePreviewEls = Array.from(document.querySelectorAll("[data-palette-preview]"));
 const controlCardToggleEls = Array.from(document.querySelectorAll("[data-control-card-toggle]"));
+const overlayInfoButtonEls = Array.from(document.querySelectorAll("[data-overlay-info-button]"));
 
 const OCEAN_CONDITION_ORDER = ["temperature", "currents", "salinity", "oxygen", "waves", "seaLevel"];
 
@@ -374,6 +380,217 @@ const OCEAN_RENDER_MODE_OPTIONS = {
   ]
 };
 
+const OVERLAY_INFO_CONTENT = {
+  temperature: {
+    title: "Surface temperature",
+    subtitle: "The Baltic’s skin temperature shapes seasons, mixing, species stress and coastal life.",
+    sections: [
+      {
+        heading: "What is it?",
+        body: "Surface temperature shows how warm or cold the uppermost ocean layer is. In the Baltic Sea it changes quickly with season, sunlight, wind and freshwater input, so it is one of the clearest ways to see the sea reacting to weather and climate."
+      },
+      {
+        heading: "How do we measure it?",
+        body: "Here it is shown from Copernicus Marine model data, which combines observations, physics and forecasting systems. In practice, surface temperature is also tracked by satellites, buoys, ships and coastal stations."
+      },
+      {
+        heading: "Why is it important?",
+        body: "Temperature affects oxygen levels, algae growth, fish habitat, stratification and how comfortable or stressful the sea is for marine life. Warmer surface waters can also strengthen heat stress in shallow coastal areas."
+      },
+      {
+        heading: "How can we improve bad impacts of it?",
+        body: "We cannot locally 'turn down' sea temperature, but we can reduce the damage it causes by cutting nutrient pollution, restoring habitats such as eelgrass, protecting refuges for marine life and lowering global greenhouse-gas emissions."
+      },
+      {
+        heading: "How is it connected to climate change?",
+        body: "Climate change is pushing the Baltic toward warmer average conditions, more marine heat extremes and longer warm seasons. That amplifies oxygen stress, shifts ecosystems and can make harmful blooms and coastal impacts more likely."
+      }
+    ]
+  },
+  currents: {
+    title: "Currents",
+    subtitle: "Currents move heat, salt, oxygen, larvae, nutrients and pollution through the Baltic.",
+    sections: [
+      {
+        heading: "What is it?",
+        body: "Currents describe the direction and speed of moving seawater. In the Baltic they are shaped by wind, sea-level differences, narrow straits, coastline geometry and density contrasts between fresher and saltier water."
+      },
+      {
+        heading: "How do we measure it?",
+        body: "This layer is based on Copernicus Marine model output. Currents can also be measured with drifting buoys, coastal radars, ship instruments and moored current profilers."
+      },
+      {
+        heading: "Why is it important?",
+        body: "Currents control how quickly oxygen, nutrients, heat and contaminants are redistributed. They also matter for larval transport, shipping conditions, search and rescue, spill response and how coastal ecosystems are connected."
+      },
+      {
+        heading: "How can we improve bad impacts of it?",
+        body: "We cannot directly engineer Baltic circulation at large scale, but we can reduce risks carried by the water itself by cutting pollution releases, improving wastewater treatment, preparing for spill events and protecting coastal habitats that buffer local impacts."
+      },
+      {
+        heading: "How is it connected to climate change?",
+        body: "Climate change can alter winds, river runoff, stratification and sea-level patterns, which can all reshape circulation. Even subtle current changes matter because they influence where heat, salt, oxygen stress and pollutants accumulate."
+      }
+    ]
+  },
+  salinity: {
+    title: "Salinity",
+    subtitle: "Salinity is one of the Baltic Sea’s defining features and controls which species can live where.",
+    sections: [
+      {
+        heading: "What is it?",
+        body: "Salinity describes how much dissolved salt is in the water. The Baltic is brackish, not fully marine, and its strong salinity gradient from west to east is a major reason the region has such distinctive ecosystems."
+      },
+      {
+        heading: "How do we measure it?",
+        body: "This map uses Copernicus Marine model data. In the field, salinity is commonly measured with conductivity sensors on buoys, research vessels, gliders and monitoring stations."
+      },
+      {
+        heading: "Why is it important?",
+        body: "Salinity influences density, layering, circulation and oxygen exchange. It also sets biological limits: some marine species need saltier water, while freshwater species tolerate much lower salinity."
+      },
+      {
+        heading: "How can we improve bad impacts of it?",
+        body: "Salinity itself is mostly controlled by climate, runoff and exchanges with the North Sea, so direct management is limited. What we can do is manage ecosystems and coastal planning around the stress that salinity shifts create."
+      },
+      {
+        heading: "How is it connected to climate change?",
+        body: "Climate-driven changes in rainfall, river discharge and large-scale circulation can freshen or redistribute Baltic waters. That can shift habitats, alter stratification and change how oxygen and nutrients move through the system."
+      }
+    ]
+  },
+  oxygen: {
+    title: "Oxygen",
+    subtitle: "Oxygen is a direct health signal for the Baltic because low oxygen means ecological stress or collapse.",
+    sections: [
+      {
+        heading: "What is it?",
+        body: "This layer shows dissolved oxygen in seawater. Marine animals and many ecological processes depend on it, and when oxygen becomes too low, bottom habitats can degrade or become unlivable."
+      },
+      {
+        heading: "How do we measure it?",
+        body: "Here it comes from Copernicus Marine biogeochemical model data. Oxygen is also measured directly with monitoring stations, ship surveys and sensor packages lowered through the water column."
+      },
+      {
+        heading: "Why is it important?",
+        body: "Low-oxygen and hypoxic areas are among the Baltic’s best-known environmental problems. Oxygen stress harms benthic life, changes food webs, can release more nutrients from sediments and reduces the resilience of the whole sea."
+      },
+      {
+        heading: "How can we improve bad impacts of it?",
+        body: "The biggest lever is reducing nutrient pollution from agriculture, wastewater and runoff. Protecting wetlands, restoring coastal habitats and improving land-based nutrient management all help reduce the conditions that fuel oxygen depletion."
+      },
+      {
+        heading: "How is it connected to climate change?",
+        body: "Warmer water holds less oxygen, and stronger stratification can reduce ventilation of deeper layers. Climate change therefore makes an existing Baltic problem harder to solve, especially when nutrient inputs remain high."
+      }
+    ]
+  },
+  waves: {
+    title: "Waves",
+    subtitle: "Waves connect weather, coastlines, safety and ecosystem stress across the Baltic.",
+    sections: [
+      {
+        heading: "What is it?",
+        body: "This layer focuses on significant wave height, which is a standard way to describe the overall sea state. Waves are generated mainly by wind and are shaped by fetch, storms, coastline geometry and water depth."
+      },
+      {
+        heading: "How do we measure it?",
+        body: "The map uses Copernicus Marine wave-model output. In reality, waves are also measured with buoys, offshore platforms, coastal radars and ship observations."
+      },
+      {
+        heading: "Why is it important?",
+        body: "Waves affect coastal erosion, harbour operations, ferry safety, offshore work and habitat disturbance in shallow waters. They also influence sediment transport and how exposed coastlines absorb storm energy."
+      },
+      {
+        heading: "How can we improve bad impacts of it?",
+        body: "We cannot stop storms, but we can reduce wave damage by protecting dunes and wetlands, avoiding risky coastal construction, improving harbour planning and maintaining natural shoreline buffers instead of hardening every edge."
+      },
+      {
+        heading: "How is it connected to climate change?",
+        body: "Climate change can alter storm tracks, ice cover and coastal exposure. Less seasonal sea ice in parts of the Baltic can leave shorelines exposed to wave action for longer periods, increasing erosion and infrastructure stress."
+      }
+    ]
+  },
+  seaLevel: {
+    title: "Sea level",
+    subtitle: "Sea level links open-water conditions, coasts, flooding risk and long-term adaptation.",
+    sections: [
+      {
+        heading: "What is it?",
+        body: "Sea level describes the height of the sea surface relative to a reference level. In the Baltic it changes because of winds, atmospheric pressure, circulation, freshwater inflow and longer-term regional sea-level trends."
+      },
+      {
+        heading: "How do we measure it?",
+        body: "This layer uses Copernicus Marine model data. Sea level is also monitored through coastal tide gauges, harbour measurements and satellite altimetry."
+      },
+      {
+        heading: "Why is it important?",
+        body: "Sea level matters for flooding, storm surge exposure, port operations, drainage systems, coastal ecosystems and long-lived infrastructure. Even modest changes can matter when they combine with storms and waves."
+      },
+      {
+        heading: "How can we improve bad impacts of it?",
+        body: "The best responses are adaptation and smart planning: avoid building in the most exposed zones, redesign drainage and flood protection, restore coastal buffers and plan infrastructure for higher future water levels."
+      },
+      {
+        heading: "How is it connected to climate change?",
+        body: "Global sea-level rise raises the baseline onto which Baltic storms and surges are added. That means events that used to be unusual can become more frequent or more damaging over time."
+      }
+    ]
+  },
+  noise: {
+    title: "Underwater noise",
+    subtitle: "Sound pollution is an invisible pressure that travels far in water and affects marine animals.",
+    sections: [
+      {
+        heading: "What is it?",
+        body: "This overlay shows underwater-noise pressure and reported impulsive events such as pile driving or seismic activity. It is environmental context rather than a live microphone feed."
+      },
+      {
+        heading: "How do we measure it?",
+        body: "The current layer is based on HELCOM assessment products and reported activity records. Underwater noise can also be measured directly with hydrophones and specialised monitoring stations."
+      },
+      {
+        heading: "Why is it important?",
+        body: "Many marine animals rely on sound to navigate, communicate, find food and avoid danger. Too much human-made noise can mask those signals, create stress and disturb migration, feeding or breeding behaviour."
+      },
+      {
+        heading: "How can we improve bad impacts of it?",
+        body: "We can reduce noise by slowing ships in sensitive areas, changing routes, improving propeller and hull design, using quieter construction methods and planning noisy activities away from key habitats or seasons."
+      },
+      {
+        heading: "How is it connected to climate change?",
+        body: "Climate change does not create underwater noise directly, but it interacts with it by adding stress. Species already challenged by warming, oxygen loss or habitat shifts may become less resilient to chronic sound disturbance."
+      }
+    ]
+  },
+  infrastructure: {
+    title: "Coastal and marine infrastructure",
+    subtitle: "Infrastructure reveals how strongly the Baltic Sea is tied to transport, energy and coastal economies.",
+    sections: [
+      {
+        heading: "What is it?",
+        body: "This overlay combines ports, routes, cables, pipelines, wind farms, power plants and land-use context. It helps explain where human systems meet the sea and where ecological pressures or conflicts can concentrate."
+      },
+      {
+        heading: "How do we measure it?",
+        body: "The current version is a curated open-data prototype assembled from multiple sources. Unlike the ocean-condition layers, it is mostly static reference context rather than a continuously updating model field."
+      },
+      {
+        heading: "Why is it important?",
+        body: "Infrastructure shapes shipping, energy supply, risk exposure, coastal development and how easily pollution or disturbance can spread through busy marine areas. It is essential context for understanding where environmental pressure comes from."
+      },
+      {
+        heading: "How can we improve bad impacts of it?",
+        body: "Better planning matters: place new infrastructure carefully, reduce conflicts with habitats, improve port and shipping efficiency, harden vulnerable assets against storms and design projects around ecological constraints rather than after them."
+      },
+      {
+        heading: "How is it connected to climate change?",
+        body: "Climate change raises the stakes for coastal infrastructure by increasing heat stress, flood risk, shoreline change and storm exposure. At the same time, the energy transition is adding new marine infrastructure such as offshore wind, which must be planned well."
+      }
+    ]
+  }
+};
+
 const state = {
   locale: "en",
   translations: {},
@@ -401,6 +618,7 @@ const state = {
     currents: "speedParticles",
     waves: "heightStreaks"
   },
+  overlayInfoId: null,
   oceanVisuals: {
     sourceIds: new Set(),
     requestToken: 0,
@@ -608,6 +826,8 @@ function setMode(mode) {
   bodyEl.dataset.mode = mode;
   if (mode !== "map") {
     clickPanelEl.hidden = true;
+    state.overlayInfoId = null;
+    renderOverlayInfoPanel();
   }
   window.setTimeout(() => {
     state.map?.resize();
@@ -1766,6 +1986,54 @@ function updateBottomLeftVisibility() {
   }
   const hasVisibleCard = Object.values(CONTROL_CARD_ELEMENTS).some((element) => element && !element.hidden);
   mapBottomLeftEl.hidden = !hasVisibleCard && clickPanelEl.hidden;
+}
+
+function overlayInfoEntry(overlayId) {
+  return OVERLAY_INFO_CONTENT[overlayId] ?? null;
+}
+
+function renderOverlayInfoPanel() {
+  if (!overlayInfoPanelEl || !overlayInfoTitleEl || !overlayInfoSubtitleEl || !overlayInfoBodyEl) {
+    return;
+  }
+
+  const entry = overlayInfoEntry(state.overlayInfoId);
+  if (!entry || state.mode !== "map") {
+    overlayInfoPanelEl.hidden = true;
+    overlayInfoPanelEl.classList.remove("is-open");
+    overlayInfoBodyEl.innerHTML = "";
+    overlayInfoButtonEls.forEach((button) => {
+      button.classList.remove("is-active");
+      button.setAttribute("aria-expanded", "false");
+    });
+    return;
+  }
+
+  overlayInfoTitleEl.textContent = entry.title;
+  overlayInfoSubtitleEl.textContent = entry.subtitle;
+  overlayInfoBodyEl.innerHTML = entry.sections
+    .map(
+      (section) => `
+        <section class="overlay-info-section">
+          <p class="overlay-info-section-title">${section.heading}</p>
+          <p class="overlay-info-section-copy">${section.body}</p>
+        </section>
+      `
+    )
+    .join("");
+  overlayInfoPanelEl.hidden = false;
+  overlayInfoPanelEl.classList.add("is-open");
+
+  overlayInfoButtonEls.forEach((button) => {
+    const active = button.dataset.overlayInfoButton === state.overlayInfoId;
+    button.classList.toggle("is-active", active);
+    button.setAttribute("aria-expanded", String(active));
+  });
+}
+
+function toggleOverlayInfoPanel(overlayId) {
+  state.overlayInfoId = state.overlayInfoId === overlayId ? null : overlayId;
+  renderOverlayInfoPanel();
 }
 
 function activeHeadlineState() {
@@ -3175,6 +3443,7 @@ function initializeMapUi() {
   ensureSelectedLocationLayer();
   registerInteractions(state.maplibregl);
   updateOverlayFrame();
+  renderOverlayInfoPanel();
   updateTransparencyPanel();
   updateLayerToggleUi();
   updateViewToggle();
@@ -3235,8 +3504,19 @@ function bindUi() {
       toggleControlCard(toggleEl.dataset.controlCardToggle);
     });
   });
+  overlayInfoButtonEls.forEach((button) => {
+    button.addEventListener("click", (event) => {
+      event.stopPropagation();
+      toggleOverlayInfoPanel(button.dataset.overlayInfoButton);
+    });
+  });
+  overlayInfoCloseEl?.addEventListener("click", () => {
+    state.overlayInfoId = null;
+    renderOverlayInfoPanel();
+  });
   window.addEventListener("resize", () => {
     renderActiveOverlayControls();
+    renderOverlayInfoPanel();
   });
 }
 

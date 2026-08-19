@@ -224,57 +224,97 @@
               </button>
             </div>
 
-            <aside id="map-left-sidebar" class="panel">
-              <button id="exit-map" class="map-back-button" type="button" data-i18n="nav.backToOverview">
-                Back to overview
-              </button>
-
-              <section class="map-sidebar-section map-headline-panel">
-                <p class="panel-label" data-i18n="map.currentView">Current view</p>
-                <p id="map-headline-title">Surface temperature</p>
-                <p id="map-headline-time">19 Aug 2026 · 12:00</p>
-              </section>
-
-              <section id="layer-panel" class="map-sidebar-section">
-                <div class="layer-panel-header">
+            <div id="map-sidebar-shell">
+              <section id="overlay-info-panel" class="panel" hidden>
+                <div class="overlay-info-header">
                   <div>
-                    <p class="panel-label">Map overlays</p>
-                    <p class="layer-panel-caption">
-                      Switch major overlays on the map. Active overlays show their details on the map itself.
-                    </p>
+                    <p class="panel-label">Overlay guide</p>
+                    <p id="overlay-info-title">Surface temperature</p>
+                    <p id="overlay-info-subtitle">Why it matters in the Baltic Sea</p>
                   </div>
-                  <button id="view-toggle" class="ghost-button compact" type="button">Hide labels</button>
+                  <button id="overlay-info-close" class="ghost-button compact overlay-info-close" type="button" aria-label="Close overlay guide">
+                    Close
+                  </button>
                 </div>
-
-                <div class="layer-group">
-                  <p class="layer-group-title" data-i18n="roadmap.ocean">Ocean conditions</p>
-                  <button id="temperature-toggle" class="layer-row is-live" type="button">Surface temperature</button>
-                  <button id="currents-toggle" class="layer-row is-live" type="button">Currents</button>
-                  <button id="salinity-toggle" class="layer-row is-live" type="button">Salinity</button>
-                  <button id="oxygen-toggle" class="layer-row is-live" type="button">Oxygen</button>
-                  <button id="waves-toggle" class="layer-row is-live" type="button">Waves</button>
-                  <button id="sea-level-toggle" class="layer-row is-live" type="button">Sea level</button>
-                </div>
-
-                <div class="layer-group">
-                  <p class="layer-group-title">Other overlays</p>
-                  <button id="noise-toggle" class="layer-row is-live" type="button">Underwater Noise</button>
-                  <button id="infrastructure-toggle" class="layer-row is-live" type="button">Coastal &amp; Marine Infrastructure</button>
-                  <button class="layer-row is-disabled" type="button" disabled><span data-i18n="layers.biodiversity">Biodiversity</span><span class="coming-soon" data-i18n="common.comingSoon">Coming soon</span></button>
-                </div>
+                <div id="overlay-info-body" class="overlay-info-body"></div>
               </section>
 
-              <section class="map-sidebar-section source-panel">
-                <p class="panel-label" data-i18n="map.source">Source</p>
-                <p id="source-summary">Copernicus Marine + EOX Cloudless + OSM overlay</p>
-                <p id="source-detail">Modelled sea-surface temperature</p>
-                <div id="transparency-detail"></div>
-              </section>
+              <aside id="map-left-sidebar" class="panel">
+                <button id="exit-map" class="map-back-button" type="button" data-i18n="nav.backToOverview">
+                  Back to overview
+                </button>
 
-              <section class="map-sidebar-section status-panel" id="status-panel" hidden>
-                <p id="status-message">Waiting for processed data...</p>
-              </section>
-            </aside>
+                <section class="map-sidebar-section map-headline-panel">
+                  <p class="panel-label" data-i18n="map.currentView">Current view</p>
+                  <p id="map-headline-title">Surface temperature</p>
+                  <p id="map-headline-time">19 Aug 2026 · 12:00</p>
+                </section>
+
+                <section id="layer-panel" class="map-sidebar-section">
+                  <div class="layer-panel-header">
+                    <div>
+                      <p class="panel-label">Map overlays</p>
+                      <p class="layer-panel-caption">
+                        Switch major overlays on the map. Active overlays show their details on the map itself.
+                      </p>
+                    </div>
+                    <button id="view-toggle" class="ghost-button compact" type="button">Hide labels</button>
+                  </div>
+
+                  <div class="layer-group">
+                    <p class="layer-group-title" data-i18n="roadmap.ocean">Ocean conditions</p>
+                    <div class="layer-row-shell">
+                      <button id="temperature-toggle" class="layer-row is-live" type="button">Surface temperature</button>
+                      <button class="layer-info-button" type="button" data-overlay-info-button="temperature" aria-label="About surface temperature">i</button>
+                    </div>
+                    <div class="layer-row-shell">
+                      <button id="currents-toggle" class="layer-row is-live" type="button">Currents</button>
+                      <button class="layer-info-button" type="button" data-overlay-info-button="currents" aria-label="About currents">i</button>
+                    </div>
+                    <div class="layer-row-shell">
+                      <button id="salinity-toggle" class="layer-row is-live" type="button">Salinity</button>
+                      <button class="layer-info-button" type="button" data-overlay-info-button="salinity" aria-label="About salinity">i</button>
+                    </div>
+                    <div class="layer-row-shell">
+                      <button id="oxygen-toggle" class="layer-row is-live" type="button">Oxygen</button>
+                      <button class="layer-info-button" type="button" data-overlay-info-button="oxygen" aria-label="About oxygen">i</button>
+                    </div>
+                    <div class="layer-row-shell">
+                      <button id="waves-toggle" class="layer-row is-live" type="button">Waves</button>
+                      <button class="layer-info-button" type="button" data-overlay-info-button="waves" aria-label="About waves">i</button>
+                    </div>
+                    <div class="layer-row-shell">
+                      <button id="sea-level-toggle" class="layer-row is-live" type="button">Sea level</button>
+                      <button class="layer-info-button" type="button" data-overlay-info-button="seaLevel" aria-label="About sea level">i</button>
+                    </div>
+                  </div>
+
+                  <div class="layer-group">
+                    <p class="layer-group-title">Other overlays</p>
+                    <div class="layer-row-shell">
+                      <button id="noise-toggle" class="layer-row is-live" type="button">Underwater Noise</button>
+                      <button class="layer-info-button" type="button" data-overlay-info-button="noise" aria-label="About underwater noise">i</button>
+                    </div>
+                    <div class="layer-row-shell">
+                      <button id="infrastructure-toggle" class="layer-row is-live" type="button">Coastal &amp; Marine Infrastructure</button>
+                      <button class="layer-info-button" type="button" data-overlay-info-button="infrastructure" aria-label="About coastal and marine infrastructure">i</button>
+                    </div>
+                    <button class="layer-row is-disabled" type="button" disabled><span data-i18n="layers.biodiversity">Biodiversity</span><span class="coming-soon" data-i18n="common.comingSoon">Coming soon</span></button>
+                  </div>
+                </section>
+
+                <section class="map-sidebar-section source-panel">
+                  <p class="panel-label" data-i18n="map.source">Source</p>
+                  <p id="source-summary">Copernicus Marine + EOX Cloudless + OSM overlay</p>
+                  <p id="source-detail">Modelled sea-surface temperature</p>
+                  <div id="transparency-detail"></div>
+                </section>
+
+                <section class="map-sidebar-section status-panel" id="status-panel" hidden>
+                  <p id="status-message">Waiting for processed data...</p>
+                </section>
+              </aside>
+            </div>
 
             <div id="map-bottom-left" hidden>
               <section class="panel context-card click-inspection-card" id="click-panel" hidden>
