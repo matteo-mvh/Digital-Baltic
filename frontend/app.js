@@ -403,7 +403,8 @@ const state = {
   },
   oceanVisuals: {
     sourceIds: new Set(),
-    requestToken: 0
+    requestToken: 0,
+    renderCache: new Map()
   },
   selectedLocationRequestToken: 0,
   infrastructure: {
@@ -733,6 +734,37 @@ function buildCellEdges(values) {
   return edges;
 }
 
+function queryIndexGeometryCache(queryIndex) {
+  if (!queryIndex) {
+    return null;
+  }
+  if (queryIndex.__geometryCache) {
+    return queryIndex.__geometryCache;
+  }
+  const latitudes = queryIndex.latitudes ?? [];
+  const longitudes = queryIndex.longitudes ?? [];
+  queryIndex.__geometryCache = {
+    latEdges: buildCellEdges(latitudes),
+    lonEdges: buildCellEdges(longitudes)
+  };
+  return queryIndex.__geometryCache;
+}
+
+function frameRenderCacheKey(conditionId, frameKey, paletteName, rowStart, rowEndExclusive, colStart, colEndExclusive, step, subdivision, stride) {
+  return [
+    conditionId,
+    frameKey,
+    paletteName,
+    rowStart,
+    rowEndExclusive,
+    colStart,
+    colEndExclusive,
+    step,
+    subdivision,
+    stride
+  ].join("|");
+}
+
 function findIntervalIndex(edges, target) {
   if (!Array.isArray(edges) || edges.length < 2) {
     return 0;
@@ -833,15 +865,15 @@ function vectorStrideForZoom(zoom) {
   return 2;
 }
 
-function interpolateStructuredValue(latitude, longitude, latitudes, longitudes, grid) {
+function interpolateStructuredValue(latitude, longitude, latitudes, longitudes, grid, latEdges = null, lonEdges = null) {
   if (!Array.isArray(latitudes) || !Array.isArray(longitudes) || latitudes.length === 0 || longitudes.length === 0) {
     return null;
   }
-  const latMatch = latitudes.findIndex((value) => Number(value) >= latitude);
-  const row1 = latMatch === -1 ? latitudes.length - 1 : clamp(latMatch, 0, latitudes.length - 1);
+  const resolvedLatEdges = latEdges ?? buildCellEdges(latitudes);
+  const resolvedLonEdges = lonEdges ?? buildCellEdges(longitudes);
+  const row1 = clamp(findIntervalIndex(resolvedLatEdges, latitude) + 1, 0, latitudes.length - 1);
   const row0 = clamp(row1 > 0 ? row1 - 1 : row1, 0, latitudes.length - 1);
-  const lonMatch = longitudes.findIndex((value) => Number(value) >= longitude);
-  const col1 = lonMatch === -1 ? longitudes.length - 1 : clamp(lonMatch, 0, longitudes.length - 1);
+  const col1 = clamp(findIntervalIndex(resolvedLonEdges, longitude) + 1, 0, longitudes.length - 1);
   const col0 = clamp(col1 > 0 ? col1 - 1 : col1, 0, longitudes.length - 1);
 
   const rows = [...new Set([row0, row1])];
@@ -871,9 +903,9 @@ function interpolateStructuredValue(latitude, longitude, latitudes, longitudes, 
   return weightTotal > 0 ? weightedSum / weightTotal : null;
 }
 
-function interpolateVectorAt(latitude, longitude, latitudes, longitudes, eastwardGrid, northwardGrid) {
-  const eastward = interpolateStructuredValue(latitude, longitude, latitudes, longitudes, eastwardGrid);
-  const northward = interpolateStructuredValue(latitude, longitude, latitudes, longitudes, northwardGrid);
+function interpolateVectorAt(latitude, longitude, latitudes, longitudes, eastwardGrid, northwardGrid, latEdges = null, lonEdges = null) {
+  const eastward = interpolateStructuredValue(latitude, longitude, latitudes, longitudes, eastwardGrid, latEdges, lonEdges);
+  const northward = interpolateStructuredValue(latitude, longitude, latitudes, longitudes, northwardGrid, latEdges, lonEdges);
   if (eastward === null || northward === null) {
     return null;
   }
@@ -1004,16 +1036,14 @@ function buildOceanRenderCollections(queryIndex, frameData, metadata, condition,
     };
   }
 
-  const latEdges = buildCellEdges(latitudes);
-  const lonEdges = buildCellEdges(longitudes);
+  const geometryCache = queryIndexGeometryCache(queryIndex);
+  const latEdges = geometryCache?.latEdges ?? buildCellEdges(latitudes);
+  const lonEdges = geometryCache?.lonEdges ?? buildCellEdges(longitudes);
   const [west, south, east, north] = expandedViewportBbox();
   const rowStart = clamp(findIntervalIndex(latEdges, south), 0, latitudes.length - 1);
   const rowEndExclusive = clamp(findIntervalIndex(latEdges, north) + 1, 1, latitudes.length);
   const colStart = clamp(findIntervalIndex(lonEdges, west), 0, longitudes.length - 1);
   const colEndExclusive = clamp(findIntervalIndex(lonEdges, east) + 1, 1, longitudes.length);
-  const scalarFeatures = [];
-  const shorelineFeatures = [];
-  const vectorFeatures = [];
   const paletteConditionId = condition.id;
 
   let { step, subdivision } = scalarResolutionForZoom(zoom);
@@ -1034,6 +1064,38 @@ function buildOceanRenderCollections(queryIndex, frameData, metadata, condition,
       subdivision *
       subdivision;
   }
+
+  let stride = vectorStrideForZoom(zoom);
+  let vectorEstimate =
+    Math.max(Math.ceil((rowEndExclusive - rowStart) / stride), 1) *
+    Math.max(Math.ceil((colEndExclusive - colStart) / stride), 1);
+  while (vectorEstimate > 900) {
+    stride += 1;
+    vectorEstimate =
+      Math.max(Math.ceil((rowEndExclusive - rowStart) / stride), 1) *
+      Math.max(Math.ceil((colEndExclusive - colStart) / stride), 1);
+  }
+
+  const cacheKey = frameRenderCacheKey(
+    condition.id,
+    frameData?.key ?? queryIndex?.frame_keys?.[frameIndex] ?? String(frameIndex),
+    oceanPaletteName(condition.id),
+    rowStart,
+    rowEndExclusive,
+    colStart,
+    colEndExclusive,
+    step,
+    subdivision,
+    stride
+  );
+  const cachedCollections = state.oceanVisuals.renderCache.get(cacheKey);
+  if (cachedCollections) {
+    return cachedCollections;
+  }
+
+  const scalarFeatures = [];
+  const shorelineFeatures = [];
+  const vectorFeatures = [];
 
   for (let rowIndex = rowStart; rowIndex < rowEndExclusive; rowIndex += step) {
     const rowStop = Math.min(rowIndex + step, rowEndExclusive);
@@ -1120,7 +1182,7 @@ function buildOceanRenderCollections(queryIndex, frameData, metadata, condition,
           const subEast = lerp(westEdge, eastEdge, (subColumn + 1) / subdivision);
           const centerLatitude = (subSouth + subNorth) / 2;
           const centerLongitude = (subWest + subEast) / 2;
-          const value = interpolateStructuredValue(centerLatitude, centerLongitude, latitudes, longitudes, frameGrid);
+          const value = interpolateStructuredValue(centerLatitude, centerLongitude, latitudes, longitudes, frameGrid, latEdges, lonEdges);
           if (value === null) {
             continue;
           }
@@ -1196,17 +1258,6 @@ function buildOceanRenderCollections(queryIndex, frameData, metadata, condition,
       : componentFrame(frameData, "northward_unit");
 
   if (Array.isArray(eastwardGrid) && Array.isArray(northwardGrid)) {
-    let stride = vectorStrideForZoom(zoom);
-    let vectorEstimate =
-      Math.max(Math.ceil((rowEndExclusive - rowStart) / stride), 1) *
-      Math.max(Math.ceil((colEndExclusive - colStart) / stride), 1);
-    while (vectorEstimate > 900) {
-      stride += 1;
-      vectorEstimate =
-        Math.max(Math.ceil((rowEndExclusive - rowStart) / stride), 1) *
-        Math.max(Math.ceil((colEndExclusive - colStart) / stride), 1);
-    }
-
     const range = displayRangeForMetadata(metadata);
     const span = Math.max(range.max - range.min, 1e-6);
     for (let rowIndex = rowStart; rowIndex < rowEndExclusive; rowIndex += stride) {
@@ -1217,7 +1268,7 @@ function buildOceanRenderCollections(queryIndex, frameData, metadata, condition,
 
         const centerLatitude = Number(latitudes[rowIndex]);
         const centerLongitude = Number(longitudes[columnIndex]);
-        const vector = interpolateVectorAt(centerLatitude, centerLongitude, latitudes, longitudes, eastwardGrid, northwardGrid);
+        const vector = interpolateVectorAt(centerLatitude, centerLongitude, latitudes, longitudes, eastwardGrid, northwardGrid, latEdges, lonEdges);
         if (!vector) {
           continue;
         }
@@ -1284,11 +1335,19 @@ function buildOceanRenderCollections(queryIndex, frameData, metadata, condition,
     }
   }
 
-  return {
+  const collections = {
     scalar: { type: "FeatureCollection", features: scalarFeatures },
     shoreline: { type: "FeatureCollection", features: shorelineFeatures },
     vector: { type: "FeatureCollection", features: vectorFeatures }
   };
+  state.oceanVisuals.renderCache.set(cacheKey, collections);
+  if (state.oceanVisuals.renderCache.size > 24) {
+    const oldestKey = state.oceanVisuals.renderCache.keys().next().value;
+    if (oldestKey) {
+      state.oceanVisuals.renderCache.delete(oldestKey);
+    }
+  }
+  return collections;
 }
 
 function setGeoJsonSourceData(sourceId, payload) {
@@ -1471,13 +1530,14 @@ async function fetchOceanSample(latitude, longitude) {
   const frameIndex = Math.min(state.activeFrameIndex, Math.max((queryIndex.times_utc || []).length - 1, 0));
   const gridKey = metadata.query_value_key || condition.value_key || "values_celsius";
   const frameGrid = frameData?.[gridKey] ?? queryIndex?.[gridKey]?.[frameIndex] ?? null;
-  const latEdges = buildCellEdges(latitudes);
-  const lonEdges = buildCellEdges(longitudes);
+  const geometryCache = queryIndexGeometryCache(queryIndex);
+  const latEdges = geometryCache?.latEdges ?? buildCellEdges(latitudes);
+  const lonEdges = geometryCache?.lonEdges ?? buildCellEdges(longitudes);
   const rowIndex = clamp(findIntervalIndex(latEdges, latitude), 0, Math.max(latitudes.length - 1, 0));
   const columnIndex = clamp(findIntervalIndex(lonEdges, longitude), 0, Math.max(longitudes.length - 1, 0));
   const cellValue = frameGrid ? numericGridValue(frameGrid, rowIndex, columnIndex) : null;
   const primaryValue =
-    frameGrid && cellValue !== null ? interpolateStructuredValue(latitude, longitude, latitudes, longitudes, frameGrid) : null;
+    frameGrid && cellValue !== null ? interpolateStructuredValue(latitude, longitude, latitudes, longitudes, frameGrid, latEdges, lonEdges) : null;
 
   const payload = {
     condition_id: state.activeConditionId,
