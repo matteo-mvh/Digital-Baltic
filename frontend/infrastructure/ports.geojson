@@ -1,0 +1,103 @@
+{
+  "type": "FeatureCollection",
+  "features": [
+    {
+      "type": "Feature",
+      "properties": {
+        "category": "ports",
+        "name": "Port of Copenhagen",
+        "country": "Denmark",
+        "type": "Commercial and ferry port",
+        "importance": "Major Danish gateway and cruise/ferry hub",
+        "source_name": "OpenStreetMap-aligned prototype references",
+        "source_url": "https://www.openstreetmap.org/",
+        "license": "ODbL / curated prototype bundle"
+      },
+      "geometry": { "type": "Point", "coordinates": [12.599, 55.692] }
+    },
+    {
+      "type": "Feature",
+      "properties": {
+        "category": "ports",
+        "name": "Port of Aarhus",
+        "country": "Denmark",
+        "type": "Commercial container port",
+        "importance": "Largest container port in Denmark",
+        "source_name": "OpenStreetMap-aligned prototype references",
+        "source_url": "https://www.openstreetmap.org/",
+        "license": "ODbL / curated prototype bundle"
+      },
+      "geometry": { "type": "Point", "coordinates": [10.247, 56.157] }
+    },
+    {
+      "type": "Feature",
+      "properties": {
+        "category": "ports",
+        "name": "Port of Gdansk",
+        "country": "Poland",
+        "type": "Commercial and industrial port",
+        "importance": "Deepwater cargo and energy terminal",
+        "source_name": "OpenStreetMap-aligned prototype references",
+        "source_url": "https://www.openstreetmap.org/",
+        "license": "ODbL / curated prototype bundle"
+      },
+      "geometry": { "type": "Point", "coordinates": [18.688, 54.392] }
+    },
+    {
+      "type": "Feature",
+      "properties": {
+        "category": "ports",
+        "name": "Port of Klaipeda",
+        "country": "Lithuania",
+        "type": "Commercial and ferry port",
+        "importance": "Ice-free Baltic gateway and industrial port",
+        "source_name": "OpenStreetMap-aligned prototype references",
+        "source_url": "https://www.openstreetmap.org/",
+        "license": "ODbL / curated prototype bundle"
+      },
+      "geometry": { "type": "Point", "coordinates": [21.127, 55.706] }
+    },
+    {
+      "type": "Feature",
+      "properties": {
+        "category": "ports",
+        "name": "Port of Riga",
+        "country": "Latvia",
+        "type": "Commercial river-sea port",
+        "importance": "Major Latvian cargo and industrial port",
+        "source_name": "OpenStreetMap-aligned prototype references",
+        "source_url": "https://www.openstreetmap.org/",
+        "license": "ODbL / curated prototype bundle"
+      },
+      "geometry": { "type": "Point", "coordinates": [24.097, 56.973] }
+    },
+    {
+      "type": "Feature",
+      "properties": {
+        "category": "ports",
+        "name": "Port of Tallinn",
+        "country": "Estonia",
+        "type": "Commercial and ferry port",
+        "importance": "Passenger, ro-ro and logistics hub",
+        "source_name": "OpenStreetMap-aligned prototype references",
+        "source_url": "https://www.openstreetmap.org/",
+        "license": "ODbL / curated prototype bundle"
+      },
+      "geometry": { "type": "Point", "coordinates": [24.758, 59.453] }
+    },
+    {
+      "type": "Feature",
+      "properties": {
+        "category": "ports",
+        "name": "Port of Helsinki",
+        "country": "Finland",
+        "type": "Commercial and ferry port",
+        "importance": "High-frequency passenger and cargo port",
+        "source_name": "OpenStreetMap-aligned prototype references",
+        "source_url": "https://www.openstreetmap.org/",
+        "license": "ODbL / curated prototype bundle"
+      },
+      "geometry": { "type": "Point", "coordinates": [24.973, 60.164] }
+    }
+  ]
+}

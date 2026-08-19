@@ -1,0 +1,233 @@
+{
+  "common": {
+    "comingSoon": "Coming soon",
+    "live": "Live"
+  },
+  "nav": {
+    "platformTag": "Public prototype",
+    "platformName": "The Baltic Sea - Live",
+    "exploreMap": "Explore the live map",
+    "backToOverview": "Back to overview",
+    "languageCode": "EN"
+  },
+  "hero": {
+    "kicker": "The Baltic Sea - Live",
+    "title": "Explore what is happening above, on and beneath the surface.",
+    "subtitle": "Explore the changing Baltic Sea through live observations, scientific models and environmental data.",
+    "body": "This public prototype combines marine science, environmental context and an interactive map so more people can understand the sea as a living system rather than a technical dataset.",
+    "cta": "Explore the map",
+    "pillTemperature": "Temperature",
+    "pillInfrastructure": "Infrastructure",
+    "pillNoise": "Noise"
+  },
+  "preview": {
+    "kicker": "Live preview",
+    "title": "Whole Baltic Sea",
+    "body": "Start with a Baltic-wide temperature view, then expand into the full live-map experience.",
+    "cta": "Explore the live map"
+  },
+  "sections": {
+    "whatKicker": "What are you looking at?",
+    "whatTitle": "Different layers come from different kinds of knowledge.",
+    "layersKicker": "What can you explore?",
+    "layersTitle": "A public-facing platform for the whole Baltic Sea.",
+    "layersBody": "Some layers work already. Others are intentionally visible as part of the longer-term vision, but remain disabled until real data and interaction design are ready.",
+    "accessibilityKicker": "Accessibility",
+    "accessibilityTitle": "Choose a temperature colour scale that is easier to read.",
+    "accessibilityBody": "The map keeps the same data while the colour palette changes. This makes it easier to compare the sea in different viewing conditions, including colour-vision differences.",
+    "whyKicker": "Why the Baltic Sea?",
+    "whyTitle": "A sea that is enclosed, connected and vulnerable.",
+    "sourcesKicker": "Where does the information come from?",
+    "sourcesTitle": "Scientific sources remain visible, but secondary to exploration."
+  },
+  "categories": {
+    "observed": {
+      "title": "Observed",
+      "body": "Measured by instruments, monitoring stations or surveys."
+    },
+    "modelled": {
+      "title": "Modelled",
+      "body": "Scientific models estimating current ocean conditions."
+    },
+    "satellite": {
+      "title": "Satellite",
+      "body": "Environmental information measured from space."
+    },
+    "historical": {
+      "title": "Historical",
+      "body": "Monitoring records that reveal how the sea changes over time."
+    }
+  },
+  "why": {
+    "enclosed": {
+      "title": "Almost enclosed",
+      "body": "Water exchange is limited, so changes can linger for years."
+    },
+    "gradient": {
+      "title": "Strong gradients",
+      "body": "Salinity, temperature and ecology shift dramatically across the region."
+    },
+    "pressure": {
+      "title": "Human pressure",
+      "body": "Shipping, nutrients, contaminants and fishing all shape the sea."
+    },
+    "change": {
+      "title": "Climate change",
+      "body": "Warming, oxygen depletion and ecosystem change are already visible."
+    }
+  },
+  "roadmap": {
+    "ocean": "Ocean conditions",
+    "life": "Life",
+    "impact": "Human impact",
+    "climate": "Climate and change"
+  },
+  "layers": {
+    "temperature": "Surface temperature",
+    "infrastructure": "Coastal & Marine Infrastructure",
+    "underwaterNoise": "Underwater Noise",
+    "currents": "Currents",
+    "salinity": "Salinity",
+    "oxygen": "Oxygen",
+    "waves": "Waves",
+    "seaLevel": "Sea level",
+    "biodiversity": "Biodiversity",
+    "eelgrass": "Eelgrass",
+    "fish": "Fish",
+    "mammals": "Marine mammals",
+    "plankton": "Plankton",
+    "ships": "Live ship tracking",
+    "shippingNoise": "Shipping noise",
+    "nutrients": "Nutrient pollution",
+    "toxins": "Toxins / contaminants",
+    "microplastics": "Microplastics",
+    "fishingPressure": "Fishing pressure",
+    "historicalChange": "Historical change",
+    "heatwaves": "Marine heatwaves",
+    "hypoxia": "Hypoxia",
+    "futureScenarios": "Future scenarios"
+  },
+  "sources": {
+    "copernicus": "Copernicus Marine",
+    "helcom": "HELCOM",
+    "emodnet": "EMODnet",
+    "ais": "AIS vessel data",
+    "future": "Additional Baltic data sources as layers are added"
+  },
+  "accessibility": {
+    "scaleButton": "Colorscale",
+    "temperatureColours": "Temperature colours",
+    "blueRed": "Blue to red",
+    "greenRed": "Green to red",
+    "grayscale": "Grayscale",
+    "yellowBlue": "Yellow to blue"
+  },
+  "map": {
+    "currentView": "Current view",
+    "source": "Source",
+    "timeline": "Forecast window",
+    "layers": "Layers",
+    "layersCaption": "Live layers work now. Roadmap layers are visible but disabled.",
+    "noiseCategories": "Noise categories",
+    "noiseCaption": "HELCOM assessment layers and reported impulsive events are shown as environmental context, not live sound measurements.",
+    "infrastructureCategories": "Infrastructure categories",
+    "infrastructureCaption": "Ports, energy, routes and land-use context stay available while ocean data move through time.",
+    "hideLabels": "Hide labels",
+    "showLabels": "Show labels",
+    "closestToNow": "Closest available to now",
+    "hoursAhead": "{count} hours ahead",
+    "hoursBehind": "{count} hours behind now",
+    "temperatureUnavailable": "Surface temperature: no water cell",
+    "selectedCoordinates": "{lat} - {lon}",
+    "modelledNote": "Modelled - not directly measured",
+    "noOverlayTitle": "Map view",
+    "noOverlaySubtitle": "Select an overlay to explore the Baltic Sea"
+  },
+  "status": {
+    "loadingMetadata": "Loading processed metadata...",
+    "loadingGrid": "Loading processed grid...",
+    "loadingMap": "Loading map renderer...",
+    "fallbackMap": "The live basemap did not load, so the viewer fell back to the local coastline layer.",
+    "loadingInfrastructure": "Loading infrastructure overlay..."
+  },
+  "transparency": {
+    "summaryOnline": "Copernicus Marine + EOX Cloudless + OSM overlay",
+    "summaryOnlineSimple": "Copernicus Marine + EOX Cloudless + OSM overlay",
+    "summaryOffline": "Copernicus Marine + local fallback coastline",
+    "temperatureDetail": "Modelled sea-surface temperature",
+    "noiseSummary": "HELCOM / ICES - modelled and reported underwater-noise data",
+    "noiseDetail": "Assessment pressure layers and reported impulsive-noise events",
+    "noisePeriod": "Assessment period: {value}",
+    "noiseCaution": "Continuous and impulsive metrics are shown separately and are not combined into one number.",
+    "noiseReporting": "Reported events depend on national reporting completeness.",
+    "infrastructureSummary": "Curated Baltic infrastructure prototype",
+    "infrastructureDetail": "Open-data prototype bundle combining ports, energy, routes and land-use context",
+    "updated": "Last update: {value}",
+    "forecastWindow": "Forecast window: {start} to {end}",
+    "infrastructureSource": "Infrastructure overlay: {value}",
+    "infrastructureLicense": "Infrastructure licence note: {value}"
+  },
+  "infrastructure": {
+    "legendTitle": "Legend",
+    "ports": "Ports & harbours",
+    "powerPlants": "Power plants",
+    "windFarms": "Offshore wind farms",
+    "cables": "Submarine cables",
+    "pipelines": "Pipelines",
+    "shipping": "Shipping routes",
+    "landUse": "General land use",
+    "stylePoint": "Point markers",
+    "styleLine": "Thin lines",
+    "styleDashed": "Dashed lines",
+    "stylePolygon": "Polygon zones",
+    "styleCorridor": "Traffic corridors",
+    "styleMutedFill": "Muted land overlay",
+    "dataSource": "Data source",
+    "country": "Country",
+    "type": "Type",
+    "importance": "Role",
+    "energySource": "Energy source",
+    "capacity": "Capacity",
+    "status": "Status",
+    "turbines": "Turbines",
+    "connection": "Connection",
+    "role": "Role",
+    "traffic": "Traffic",
+    "context": "Context",
+    "prototypeSource": "Curated open-data prototype",
+    "prototypeLicense": "Mixed open licences; see documentation.",
+    "staticContext": "Static context overlay"
+  },
+  "noise": {
+    "continuousNoise": "Continuous noise",
+    "impulsiveEvents": "Noise events",
+    "impulsivePressure": "Impulsive noise pressure",
+    "ecologicalEffect": "Noise impact on mobile species",
+    "assessmentPeriod": "HELCOM assessment layers - 2016-2021",
+    "legendTitle": "Noise legend",
+    "legendContinuous": "HELCOM continuous-noise pressure",
+    "legendImpulsivePressure": "HELCOM impulsive-noise pressure",
+    "legendImpact": "Potential impact on mobile species",
+    "legendEvents": "Reported impulsive events",
+    "legendNoDb": "Not shown as dB",
+    "legendPressureIndex": "Pressure index",
+    "legendImpactIndex": "Impact index",
+    "legendReportedEvent": "Reported event",
+    "eventPileDriving": "Pile driving",
+    "eventSeismic": "Seismic / airguns",
+    "eventExplosion": "Explosions",
+    "eventSonar": "Sonar / deterrents",
+    "eventOther": "Other impulsive noise",
+    "eventUnknown": "Unknown event",
+    "popupReportedEvent": "Reported impulsive-noise event",
+    "popupUnknownType": "Unknown event type",
+    "popupEvent": "Event",
+    "popupCountry": "Country",
+    "popupYear": "Year",
+    "popupStart": "Start",
+    "popupEnd": "End",
+    "popupMitigation": "Mitigation",
+    "popupValueCode": "Value code",
+    "dataSource": "Data source"
+  }
+}

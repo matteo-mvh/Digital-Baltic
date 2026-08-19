@@ -3,60 +3,368 @@
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <title>Copenhagen Sea Live</title>
-    <link rel="preconnect" href="https://fonts.googleapis.com" />
-    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
-    <link
-      href="https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,600;9..144,700&family=Manrope:wght@400;500;700&display=swap"
-      rel="stylesheet"
-    />
-    <link
-      href="https://unpkg.com/maplibre-gl@5.6.0/dist/maplibre-gl.css"
-      rel="stylesheet"
-    />
+    <title>The Baltic Sea - Live</title>
+    <link rel="stylesheet" href="https://unpkg.com/maplibre-gl@5.6.2/dist/maplibre-gl.css" />
     <link rel="stylesheet" href="./styles.css" />
   </head>
-  <body>
+  <body data-mode="home">
     <div id="app-shell">
-      <div id="map"></div>
+      <header id="global-bar">
+        <div class="brand-lockup">
+          <p class="global-eyebrow" data-i18n="nav.platformTag">Public prototype</p>
+          <p class="global-title" data-i18n="nav.platformName">The Baltic Sea - Live</p>
+        </div>
 
-      <header class="panel hero-panel">
-        <p class="eyebrow">Live Baltic Sea prototype</p>
-        <h1>Copenhagen Sea</h1>
-        <p id="subtitle">Loading the latest surface temperature field...</p>
+        <div class="global-actions">
+          <button id="enter-map-top" class="ghost-button" type="button" data-i18n="nav.exploreMap">
+            Explore the live map
+          </button>
+
+          <div class="palette-picker">
+            <button
+              id="palette-button"
+              class="language-button"
+              type="button"
+              aria-haspopup="true"
+              aria-expanded="false"
+            >
+              <span id="palette-current" data-i18n="accessibility.scaleButton">Colorscale</span>
+            </button>
+            <div id="palette-menu" class="language-menu" hidden>
+              <p class="picker-label" data-i18n="accessibility.temperatureColours">Temperature colours</p>
+              <div class="palette-switcher topbar-palette-switcher" role="group" aria-label="Temperature colour palettes">
+                <button class="palette-option is-selected" type="button" data-palette="blueRed">
+                  <span class="palette-option-text" data-i18n="accessibility.blueRed">Blue to red</span>
+                  <span class="palette-preview" data-palette-preview="blueRed" aria-hidden="true"></span>
+                </button>
+                <button class="palette-option" type="button" data-palette="greenRed">
+                  <span class="palette-option-text" data-i18n="accessibility.greenRed">Green to red</span>
+                  <span class="palette-preview" data-palette-preview="greenRed" aria-hidden="true"></span>
+                </button>
+                <button class="palette-option" type="button" data-palette="grayscale">
+                  <span class="palette-option-text" data-i18n="accessibility.grayscale">Grayscale</span>
+                  <span class="palette-preview" data-palette-preview="grayscale" aria-hidden="true"></span>
+                </button>
+                <button class="palette-option" type="button" data-palette="yellowBlue">
+                  <span class="palette-option-text" data-i18n="accessibility.yellowBlue">Yellow to blue</span>
+                  <span class="palette-preview" data-palette-preview="yellowBlue" aria-hidden="true"></span>
+                </button>
+              </div>
+            </div>
+          </div>
+
+          <div class="language-picker">
+            <button
+              id="language-button"
+              class="language-button"
+              type="button"
+              aria-haspopup="true"
+              aria-expanded="false"
+            >
+              <span class="language-globe">🌐</span>
+              <span id="language-current">EN</span>
+            </button>
+            <div id="language-menu" class="language-menu" hidden></div>
+          </div>
+        </div>
       </header>
 
-      <aside class="panel source-panel">
-        <p class="panel-label">Source</p>
-        <p id="source-summary">Copernicus Marine + OpenFreeMap</p>
-        <p id="source-detail">Free public prototype stack</p>
-      </aside>
+      <main id="platform-layout">
+        <section id="home-column">
+          <section class="content-panel hero-copy">
+            <p class="section-kicker" data-i18n="hero.kicker">The Baltic Sea - Live</p>
+            <h1 data-i18n="hero.title">Explore what is happening above, on and beneath the surface.</h1>
+            <p class="lead" data-i18n="hero.subtitle">
+              Explore the changing Baltic Sea through live observations, scientific models and
+              environmental data.
+            </p>
+            <p class="supporting-copy" data-i18n="hero.body">
+              This public prototype combines marine science, environmental context and an interactive
+              map so more people can understand the sea as a living system rather than a technical
+              dataset.
+            </p>
 
-      <section class="panel click-panel" id="click-panel" hidden>
-        <p class="panel-label">At selected point</p>
-        <p class="metric" id="clicked-temperature">--.- degC</p>
-        <p id="clicked-coordinates">55.0000 N, 12.0000 E</p>
-      </section>
+            <div class="hero-actions">
+              <button id="hero-enter-map" class="primary-button" type="button" data-i18n="hero.cta">
+                Explore the map
+              </button>
+              <div class="hero-pill-row">
+                <span class="hero-pill" data-i18n="hero.pillTemperature">Temperature</span>
+                <span class="hero-pill" data-i18n="hero.pillInfrastructure">Infrastructure</span>
+                <span class="hero-pill" data-i18n="hero.pillNoise">Noise</span>
+              </div>
+            </div>
+          </section>
 
-      <section class="panel legend-panel" id="legend-panel" hidden>
-        <div class="legend-topline">
-          <p class="panel-label">Surface temperature</p>
-          <p id="legend-range"></p>
-        </div>
-        <div class="legend-bar"></div>
-        <div class="legend-scale">
-          <span id="legend-min"></span>
-          <span>degC</span>
-          <span id="legend-max"></span>
-        </div>
-      </section>
+          <section class="content-panel">
+            <p class="section-kicker" data-i18n="sections.whatKicker">What are you looking at?</p>
+            <h2 data-i18n="sections.whatTitle">Different layers come from different kinds of knowledge.</h2>
+            <div class="story-grid">
+              <article class="story-card">
+                <h3 data-i18n="categories.observed.title">Observed</h3>
+                <p data-i18n="categories.observed.body">Measured by instruments, monitoring stations or surveys.</p>
+              </article>
+              <article class="story-card">
+                <h3 data-i18n="categories.modelled.title">Modelled</h3>
+                <p data-i18n="categories.modelled.body">Scientific models estimating current ocean conditions.</p>
+              </article>
+              <article class="story-card">
+                <h3 data-i18n="categories.satellite.title">Satellite</h3>
+                <p data-i18n="categories.satellite.body">Environmental information measured from space.</p>
+              </article>
+              <article class="story-card">
+                <h3 data-i18n="categories.historical.title">Historical</h3>
+                <p data-i18n="categories.historical.body">Monitoring records that reveal how the sea changes over time.</p>
+              </article>
+            </div>
+          </section>
 
-      <section class="panel status-panel" id="status-panel">
-        <p id="status-message">Waiting for processed data...</p>
-      </section>
+          <section class="content-panel">
+            <p class="section-kicker" data-i18n="sections.layersKicker">What can you explore?</p>
+            <h2 data-i18n="sections.layersTitle">A public-facing platform for the whole Baltic Sea.</h2>
+            <p class="supporting-copy" data-i18n="sections.layersBody">
+              Some layers work already. Others are intentionally visible as part of the longer-term
+              vision, but remain disabled until real data and interaction design are ready.
+            </p>
+            <div class="roadmap-grid">
+              <article class="roadmap-card">
+                <p class="roadmap-heading" data-i18n="roadmap.ocean">Ocean conditions</p>
+                <ul class="roadmap-list">
+                  <li class="is-live" data-i18n="layers.temperature">Surface temperature</li>
+                  <li data-i18n="layers.currents">Currents</li>
+                  <li data-i18n="layers.salinity">Salinity</li>
+                  <li data-i18n="layers.oxygen">Oxygen</li>
+                  <li data-i18n="layers.waves">Waves</li>
+                  <li data-i18n="layers.seaLevel">Sea level</li>
+                </ul>
+              </article>
+              <article class="roadmap-card">
+                <p class="roadmap-heading" data-i18n="roadmap.life">Life</p>
+                <ul class="roadmap-list">
+                  <li data-i18n="layers.biodiversity">Biodiversity</li>
+                  <li data-i18n="layers.eelgrass">Eelgrass</li>
+                  <li data-i18n="layers.fish">Fish</li>
+                  <li data-i18n="layers.mammals">Marine mammals</li>
+                  <li data-i18n="layers.plankton">Plankton</li>
+                </ul>
+              </article>
+              <article class="roadmap-card">
+                <p class="roadmap-heading" data-i18n="roadmap.impact">Human impact</p>
+                <ul class="roadmap-list">
+                  <li class="is-live" data-i18n="layers.infrastructure">Coastal &amp; Marine Infrastructure</li>
+                  <li class="is-live" data-i18n="layers.underwaterNoise">Underwater noise</li>
+                  <li data-i18n="layers.ships">Live ship tracking</li>
+                  <li data-i18n="layers.shippingNoise">Shipping noise</li>
+                  <li data-i18n="layers.nutrients">Nutrient pollution</li>
+                  <li data-i18n="layers.toxins">Toxins / contaminants</li>
+                  <li data-i18n="layers.microplastics">Microplastics</li>
+                  <li data-i18n="layers.fishingPressure">Fishing pressure</li>
+                </ul>
+              </article>
+              <article class="roadmap-card">
+                <p class="roadmap-heading" data-i18n="roadmap.climate">Climate and change</p>
+                <ul class="roadmap-list">
+                  <li data-i18n="layers.historicalChange">Historical change</li>
+                  <li data-i18n="layers.heatwaves">Marine heatwaves</li>
+                  <li data-i18n="layers.hypoxia">Hypoxia</li>
+                  <li data-i18n="layers.futureScenarios">Future scenarios</li>
+                </ul>
+              </article>
+            </div>
+          </section>
+
+          <section class="content-panel">
+            <p class="section-kicker" data-i18n="sections.whyKicker">Why the Baltic Sea?</p>
+            <h2 data-i18n="sections.whyTitle">A sea that is enclosed, connected and vulnerable.</h2>
+            <div class="story-grid">
+              <article class="story-card">
+                <h3 data-i18n="why.enclosed.title">Almost enclosed</h3>
+                <p data-i18n="why.enclosed.body">Water exchange is limited, so changes can linger for years.</p>
+              </article>
+              <article class="story-card">
+                <h3 data-i18n="why.gradient.title">Strong gradients</h3>
+                <p data-i18n="why.gradient.body">Salinity, temperature and ecology shift dramatically across the region.</p>
+              </article>
+              <article class="story-card">
+                <h3 data-i18n="why.pressure.title">Human pressure</h3>
+                <p data-i18n="why.pressure.body">Shipping, nutrients, contaminants and fishing all shape the sea.</p>
+              </article>
+              <article class="story-card">
+                <h3 data-i18n="why.change.title">Climate change</h3>
+                <p data-i18n="why.change.body">Warming, oxygen depletion and ecosystem change are already visible.</p>
+              </article>
+            </div>
+          </section>
+
+          <section class="content-panel source-strip">
+            <p class="section-kicker" data-i18n="sections.sourcesKicker">Where does the information come from?</p>
+            <h2 data-i18n="sections.sourcesTitle">Scientific sources remain visible, but secondary to exploration.</h2>
+            <div class="source-tags">
+              <span data-i18n="sources.copernicus">Copernicus Marine</span>
+              <span data-i18n="sources.helcom">HELCOM</span>
+              <span data-i18n="sources.emodnet">EMODnet</span>
+              <span data-i18n="sources.ais">AIS vessel data</span>
+              <span data-i18n="sources.future">Additional Baltic data sources as layers are added</span>
+            </div>
+          </section>
+        </section>
+
+        <section id="experience-shell">
+          <div id="map-stage">
+            <div id="map"></div>
+
+            <div class="map-preview-card">
+              <p class="section-kicker" data-i18n="preview.kicker">Live preview</p>
+              <h2 data-i18n="preview.title">Whole Baltic Sea</h2>
+              <p data-i18n="preview.body">
+                Start with a Baltic-wide temperature view, then expand into the full live-map experience.
+              </p>
+              <button id="preview-enter-map" class="primary-button" type="button" data-i18n="preview.cta">
+                Explore the live map
+              </button>
+            </div>
+
+            <aside id="map-left-sidebar" class="panel">
+              <button id="exit-map" class="map-back-button" type="button" data-i18n="nav.backToOverview">
+                Back to overview
+              </button>
+
+              <section class="map-sidebar-section map-headline-panel">
+                <p class="panel-label" data-i18n="map.currentView">Current view</p>
+                <p id="map-headline-title">Surface temperature</p>
+                <p id="map-headline-time">19 Aug 2026 · 12:00</p>
+              </section>
+
+              <section id="layer-panel" class="map-sidebar-section">
+                <div class="layer-panel-header">
+                  <div>
+                    <p class="panel-label">Map overlays</p>
+                    <p class="layer-panel-caption">
+                      Switch major overlays on the map. Active overlays show their details on the map itself.
+                    </p>
+                  </div>
+                  <button id="view-toggle" class="ghost-button compact" type="button">Hide labels</button>
+                </div>
+
+                <div class="layer-group">
+                  <p class="layer-group-title" data-i18n="roadmap.ocean">Ocean conditions</p>
+                  <button id="temperature-toggle" class="layer-row is-live" type="button">Surface temperature</button>
+                  <button id="currents-toggle" class="layer-row" type="button">Currents</button>
+                  <button id="salinity-toggle" class="layer-row" type="button">Salinity</button>
+                  <button id="oxygen-toggle" class="layer-row" type="button">Oxygen</button>
+                  <button id="waves-toggle" class="layer-row" type="button">Waves</button>
+                  <button id="sea-level-toggle" class="layer-row" type="button">Sea level</button>
+                </div>
+
+                <div class="layer-group">
+                  <p class="layer-group-title">Other overlays</p>
+                  <button id="noise-toggle" class="layer-row is-live" type="button">Underwater Noise</button>
+                  <button id="infrastructure-toggle" class="layer-row is-live" type="button">Coastal &amp; Marine Infrastructure</button>
+                  <button class="layer-row is-disabled" type="button" disabled><span data-i18n="layers.biodiversity">Biodiversity</span><span class="coming-soon" data-i18n="common.comingSoon">Coming soon</span></button>
+                </div>
+              </section>
+
+              <section class="map-sidebar-section source-panel">
+                <p class="panel-label" data-i18n="map.source">Source</p>
+                <p id="source-summary">Copernicus Marine + EOX Cloudless + OSM overlay</p>
+                <p id="source-detail">Modelled sea-surface temperature</p>
+                <div id="transparency-detail"></div>
+              </section>
+
+              <section class="map-sidebar-section status-panel" id="status-panel" hidden>
+                <p id="status-message">Waiting for processed data...</p>
+              </section>
+            </aside>
+
+            <div id="map-bottom-left" hidden>
+              <section class="panel context-card click-inspection-card" id="click-panel" hidden>
+                <p class="metric" id="clicked-primary-value">--</p>
+                <p id="clicked-layer-name">Surface temperature</p>
+                <p id="clicked-coordinates">55.0000 N · 12.0000 E</p>
+                <p id="clicked-time">19 Aug 2026 · 12:00</p>
+              </section>
+
+              <div id="active-overlay-controls" class="active-overlay-controls">
+                <section class="panel context-card ocean-condition-card" id="ocean-condition-panel" hidden>
+                  <button class="context-card-toggle" type="button" data-control-card-toggle="oceanCondition" aria-expanded="true">
+                    <span class="context-card-toggle-copy">
+                      <span class="panel-label" id="ocean-condition-card-label">Surface temperature</span>
+                      <span class="context-card-summary" id="ocean-condition-card-summary">Time and legend</span>
+                    </span>
+                    <span class="context-card-chevron" aria-hidden="true">▴</span>
+                  </button>
+                  <div class="context-card-body" id="ocean-condition-panel-body">
+                    <p class="metric" id="ocean-condition-current-value">--</p>
+                    <p class="metric-subtle" id="ocean-condition-current-note">Tap the map to sample a local water value.</p>
+                    <div class="timeline-main">
+                      <p class="context-card-body-title">Time</p>
+                      <p id="time-primary">Loading time steps...</p>
+                      <p id="time-secondary">Using dataset-native forecast steps</p>
+                      <input id="time-slider" type="range" min="0" max="0" step="1" value="0" />
+                    </div>
+                    <div class="timeline-legend" id="ocean-condition-legend">
+                      <div class="legend-topline">
+                        <p class="legend-inline-label" id="ocean-condition-legend-title">Surface temperature</p>
+                        <p id="ocean-condition-legend-range"></p>
+                      </div>
+                      <div class="timeline-legend-bar" id="ocean-condition-legend-bar"></div>
+                      <div class="legend-scale">
+                        <span id="ocean-condition-legend-min"></span>
+                        <span id="ocean-condition-legend-unit">degC</span>
+                        <span id="ocean-condition-legend-max"></span>
+                      </div>
+                    </div>
+                    <div id="ocean-condition-render-mode-list" class="infrastructure-category-list" hidden></div>
+                    <div id="ocean-condition-placeholder" class="context-card-placeholder" hidden></div>
+                  </div>
+                </section>
+
+                <section class="panel context-card" id="noise-panel" hidden>
+                  <button class="context-card-toggle" type="button" data-control-card-toggle="noise" aria-expanded="true">
+                    <span class="context-card-toggle-copy">
+                      <span class="panel-label">Underwater noise</span>
+                      <span class="context-card-summary" id="noise-card-summary">2 layers</span>
+                    </span>
+                    <span class="context-card-chevron" aria-hidden="true">▴</span>
+                  </button>
+                  <div class="context-card-body" id="noise-panel-body">
+                    <div class="infrastructure-panel-copy">
+                      <p class="context-card-body-title" data-i18n="map.noiseCategories">Noise categories</p>
+                      <p class="infrastructure-panel-body" data-i18n="map.noiseCaption">
+                        HELCOM assessment layers and reported impulsive events are shown as environmental context, not live sound measurements.
+                      </p>
+                    </div>
+                    <div id="noise-category-list" class="infrastructure-category-list"></div>
+                    <div id="noise-legend" class="infrastructure-legend" hidden></div>
+                  </div>
+                </section>
+
+                <section class="panel context-card" id="infrastructure-panel" hidden>
+                  <button class="context-card-toggle" type="button" data-control-card-toggle="infrastructure" aria-expanded="true">
+                    <span class="context-card-toggle-copy">
+                      <span class="panel-label">Marine infrastructure</span>
+                      <span class="context-card-summary" id="infrastructure-card-summary">7 layers</span>
+                    </span>
+                    <span class="context-card-chevron" aria-hidden="true">▴</span>
+                  </button>
+                  <div class="context-card-body" id="infrastructure-panel-body">
+                    <div class="infrastructure-panel-copy">
+                      <p class="context-card-body-title" data-i18n="map.infrastructureCategories">Infrastructure categories</p>
+                      <p class="infrastructure-panel-body" data-i18n="map.infrastructureCaption">
+                        Ports, energy, routes and land-use context stay available while ocean data move through time.
+                      </p>
+                    </div>
+                    <div id="infrastructure-category-list" class="infrastructure-category-list"></div>
+                    <div id="infrastructure-legend" class="infrastructure-legend" hidden></div>
+                  </div>
+                </section>
+              </div>
+            </div>
+          </div>
+        </section>
+      </main>
     </div>
 
-    <script src="https://unpkg.com/maplibre-gl@5.6.0/dist/maplibre-gl.js"></script>
     <script src="./app.js" type="module"></script>
   </body>
 </html>

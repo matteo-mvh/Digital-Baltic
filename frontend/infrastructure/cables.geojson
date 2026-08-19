@@ -1,0 +1,61 @@
+{
+  "type": "FeatureCollection",
+  "features": [
+    {
+      "type": "Feature",
+      "properties": {
+        "category": "cables",
+        "name": "Kontek",
+        "type": "Electricity interconnector",
+        "connection": "Denmark - Germany",
+        "capacity": "600 MW",
+        "source_name": "Baltic interconnector references",
+        "source_url": "https://www.entsoe.eu/",
+        "license": "Public network reference data / curated prototype bundle"
+      },
+      "geometry": { "type": "LineString", "coordinates": [[12.54,55.67],[12.77,55.25],[12.95,54.9],[13.09,54.55]] }
+    },
+    {
+      "type": "Feature",
+      "properties": {
+        "category": "cables",
+        "name": "NordBalt",
+        "type": "Electricity interconnector",
+        "connection": "Sweden - Lithuania",
+        "capacity": "700 MW",
+        "source_name": "Baltic interconnector references",
+        "source_url": "https://www.entsoe.eu/",
+        "license": "Public network reference data / curated prototype bundle"
+      },
+      "geometry": { "type": "LineString", "coordinates": [[17.05,56.45],[18.8,56.12],[20.6,55.88],[21.05,55.68]] }
+    },
+    {
+      "type": "Feature",
+      "properties": {
+        "category": "cables",
+        "name": "EstLink 2",
+        "type": "Electricity interconnector",
+        "connection": "Estonia - Finland",
+        "capacity": "650 MW",
+        "source_name": "Baltic interconnector references",
+        "source_url": "https://www.entsoe.eu/",
+        "license": "Public network reference data / curated prototype bundle"
+      },
+      "geometry": { "type": "LineString", "coordinates": [[24.32,59.48],[24.6,59.72],[24.87,59.95],[25.15,60.18]] }
+    },
+    {
+      "type": "Feature",
+      "properties": {
+        "category": "cables",
+        "name": "SwePol Link",
+        "type": "Electricity interconnector",
+        "connection": "Sweden - Poland",
+        "capacity": "600 MW",
+        "source_name": "Baltic interconnector references",
+        "source_url": "https://www.entsoe.eu/",
+        "license": "Public network reference data / curated prototype bundle"
+      },
+      "geometry": { "type": "LineString", "coordinates": [[16.46,56.3],[17.4,55.8],[18.45,55.1],[18.62,54.68]] }
+    }
+  ]
+}

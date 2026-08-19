@@ -1,0 +1,66 @@
+name: Update Ocean Data
+
+on:
+  workflow_dispatch:
+  schedule:
+    - cron: "15 3 * * *"
+
+permissions:
+  contents: read
+  pages: write
+  id-token: write
+
+concurrency:
+  group: update-ocean-data
+  cancel-in-progress: false
+
+jobs:
+  update-and-deploy:
+    runs-on: ubuntu-latest
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v4
+
+      - name: Set deployed site URL
+        shell: bash
+        run: |
+          repo_name="${{ github.event.repository.name }}"
+          owner="${{ github.repository_owner }}"
+          if [ "$repo_name" = "${owner}.github.io" ]; then
+            echo "DIGITAL_BALTIC_SITE_URL=https://${owner}.github.io" >> "$GITHUB_ENV"
+          else
+            echo "DIGITAL_BALTIC_SITE_URL=https://${owner}.github.io/${repo_name}" >> "$GITHUB_ENV"
+          fi
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Install Python dependencies
+        run: pip install -r requirements.txt
+
+      - name: Update Copernicus assets
+        env:
+          COPERNICUS_USERNAME: ${{ secrets.COPERNICUS_USERNAME }}
+          COPERNICUS_PASSWORD: ${{ secrets.COPERNICUS_PASSWORD }}
+          DIGITAL_BALTIC_SITE_URL: ${{ env.DIGITAL_BALTIC_SITE_URL }}
+        run: python scripts/update_copernicus.py
+
+      - name: Build static site
+        run: python scripts/build_site.py
+
+      - name: Configure GitHub Pages
+        uses: actions/configure-pages@v5
+
+      - name: Upload Pages artifact
+        uses: actions/upload-pages-artifact@v3
+        with:
+          path: site
+
+      - name: Deploy to GitHub Pages
+        id: deployment
+        uses: actions/deploy-pages@v4

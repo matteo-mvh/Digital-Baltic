@@ -1,0 +1,800 @@
+from __future__ import annotations
+
+import argparse
+import json
+import os
+import shutil
+import sys
+from dataclasses import dataclass
+from datetime import datetime, timedelta, timezone
+from pathlib import Path
+from typing import Any
+from urllib import error as urlerror
+from urllib import parse as urlparse
+from urllib import request as urlrequest
+
+import numpy as np
+import pandas as pd
+import xarray as xr
+from dotenv import load_dotenv
+
+if __package__ in {None, ""}:
+    sys.path.append(str(Path(__file__).resolve().parents[1]))
+
+import copernicusmarine
+
+from data_pipeline.config import (
+    BALTIC_REGION,
+    BBOX,
+    COPERNICUS_PASSWORD_ENV_VARS,
+    COPERNICUS_USERNAME_ENV_VARS,
+    INITIAL_VIEW,
+    LAND_MASK_FILENAME,
+    MAX_RUNNER_RAM_GB,
+    MAX_TEMPORARY_DISK_GB,
+    OCEAN_DATASETS,
+    SITE_OCEAN_ROOT,
+    SITE_URL_ENV_VAR,
+    TEMPORARY_WORK_ROOT,
+    TEMPERATURE_TILE_LEVELS,
+)
+from data_pipeline.ocean_layers import OCEAN_CONDITION_ORDER, ocean_condition_definitions
+from data_pipeline.process_temperature import (
+    _build_land_mask,
+    _copenhagen_hour,
+    _downsample_axis,
+    _find_coordinate_name,
+    _nice_display_range,
+    _render_overlay,
+    _surface_stack,
+    _tile_bounds,
+    _to_celsius,
+)
+
+QUERY_INDEX_NAME = "query_index.json"
+MANIFEST_NAME = "manifest.json"
+
+
+@dataclass
+class FrameBundle:
+    key: str
+    time_utc: str
+    latitudes: np.ndarray
+    longitudes: np.ndarray
+    values: np.ndarray
+    min_value: float
+    max_value: float
+    original_units: str
+    converted_from_kelvin: bool
+    raw_bytes: int
+    source: str
+
+
+def _log(message: str) -> None:
+    print(message, flush=True)
+
+
+def _runtime_now() -> datetime:
+    return datetime.now(timezone.utc)
+
+
+def _normalize_timestamp(value: Any) -> str:
+    return pd.Timestamp(value).tz_convert("UTC").isoformat().replace("+00:00", "Z")
+
+
+def _frame_key(timestamp_iso: str) -> str:
+    return (
+        timestamp_iso.replace(":", "-")
+        .replace("+00:00", "Z")
+        .replace(".000000", "")
+        .replace(".000", "")
+    )
+
+
+def _load_json(path: Path) -> dict[str, Any]:
+    return json.loads(path.read_text(encoding="utf-8"))
+
+
+def _fetch_json(url: str) -> dict[str, Any] | None:
+    try:
+        with urlrequest.urlopen(url) as response:
+            if response.status >= 400:
+                return None
+            return json.loads(response.read().decode("utf-8"))
+    except (json.JSONDecodeError, urlerror.HTTPError, urlerror.URLError):
+        return None
+
+
+def _resolve_site_url(value: str | None) -> str | None:
+    candidate = value or os.getenv(SITE_URL_ENV_VAR)
+    if not candidate:
+        return None
+    return candidate.rstrip("/")
+
+
+def _ensure_copernicus_environment() -> None:
+    username = next((os.getenv(name) for name in COPERNICUS_USERNAME_ENV_VARS if os.getenv(name)), None)
+    password = next((os.getenv(name) for name in COPERNICUS_PASSWORD_ENV_VARS if os.getenv(name)), None)
+    if not username or not password:
+        raise RuntimeError(
+            "Missing Copernicus credentials. Add COPERNICUS_USERNAME and COPERNICUS_PASSWORD as environment variables."
+        )
+
+    os.environ.setdefault("COPERNICUS_USERNAME", username)
+    os.environ.setdefault("COPERNICUS_PASSWORD", password)
+    os.environ.setdefault("COPERNICUSMARINE_SERVICE_USERNAME", username)
+    os.environ.setdefault("COPERNICUSMARINE_SERVICE_PASSWORD", password)
+
+
+def _previous_condition_state(
+    condition_id: str,
+    site_url: str | None,
+) -> tuple[dict[str, Any] | None, dict[str, Any] | None]:
+    condition_root = SITE_OCEAN_ROOT / condition_id
+    local_manifest = condition_root / MANIFEST_NAME
+    local_query_index = condition_root / QUERY_INDEX_NAME
+    if local_manifest.exists() and local_query_index.exists():
+        return _load_json(local_manifest), _load_json(local_query_index)
+
+    if not site_url:
+        return None, None
+
+    ocean_manifest = _fetch_json(f"{site_url}/data/ocean/manifest.json")
+    if not ocean_manifest:
+        return None, None
+    condition_entry = next((item for item in ocean_manifest.get("conditions", []) if item.get("id") == condition_id), None)
+    metadata = condition_entry.get("metadata") if condition_entry else None
+    if not metadata:
+        return None, None
+    query_index = _fetch_json(urlparse.urljoin(f"{site_url}/", metadata.get("query_index_url", "")))
+    if not query_index:
+        return None, None
+    return metadata, query_index
+
+
+def _available_times(dataset_id: str) -> pd.DatetimeIndex:
+    remote = copernicusmarine.open_dataset(dataset_id=dataset_id)
+    try:
+        if "time" not in remote.coords:
+            raise RuntimeError(f"Dataset {dataset_id} does not expose a time coordinate.")
+        return pd.to_datetime(remote["time"].values, utc=True)
+    finally:
+        close_method = getattr(remote, "close", None)
+        if callable(close_method):
+            close_method()
+
+
+def _desired_times(config: dict[str, Any], available_times: pd.DatetimeIndex) -> list[str]:
+    now_utc = _runtime_now()
+    start_time = now_utc - timedelta(days=int(config["history_days"]))
+    end_time = now_utc + timedelta(days=int(config["forecast_days"]))
+    selected = available_times[(available_times >= start_time) & (available_times <= end_time)]
+    if len(selected) == 0:
+        nearest_index = int((available_times - now_utc).to_series().abs().argmin())
+        selected = pd.DatetimeIndex([available_times[nearest_index]])
+    return [_normalize_timestamp(value) for value in selected]
+
+
+def _surface_dataarray(dataset: xr.Dataset, variable_name: str) -> xr.DataArray:
+    data = dataset[variable_name]
+    for depth_dim in ("depth", "deptht", "lev", "z"):
+        if depth_dim in data.dims:
+            data = data.isel({depth_dim: 0})
+            break
+    if "time" not in data.dims:
+        data = data.expand_dims(time=[pd.Timestamp(_runtime_now())])
+    return data.squeeze(drop=True)
+
+
+def _extract_values(dataset: xr.Dataset, config: dict[str, Any]) -> tuple[np.ndarray, str, bool, str]:
+    processor = config["processor"]
+
+    if processor == "temperature":
+        data = _surface_stack(dataset)
+        values, original_units, converted_from_kelvin = _to_celsius(data)
+        timestamp_iso = _normalize_timestamp(pd.to_datetime(data["time"].values, utc=True)[0])
+        return values[0] if values.ndim == 3 else values, original_units, converted_from_kelvin, timestamp_iso
+
+    if processor == "currents":
+        u_data = _surface_dataarray(dataset, "uo")
+        v_data = _surface_dataarray(dataset, "vo")
+        u_values = u_data.values.astype(np.float32)
+        v_values = v_data.values.astype(np.float32)
+        if u_values.ndim == 3:
+            u_values = u_values[0]
+        if v_values.ndim == 3:
+            v_values = v_values[0]
+        values = np.sqrt(np.square(u_values) + np.square(v_values))
+        timestamp_iso = _normalize_timestamp(pd.to_datetime(u_data["time"].values, utc=True)[0])
+        return values, str(u_data.attrs.get("units", config["units"])) or config["units"], False, timestamp_iso
+
+    data = _surface_dataarray(dataset, str(config["primary_variable"]))
+    values = data.values.astype(np.float32)
+    if values.ndim == 3:
+        values = values[0]
+    timestamp_iso = _normalize_timestamp(pd.to_datetime(data["time"].values, utc=True)[0])
+    return values, str(data.attrs.get("units", config["units"])) or config["units"], False, timestamp_iso
+
+
+def _validate_frame(
+    config: dict[str, Any],
+    requested_time: str,
+    detected_time: str,
+    latitudes: np.ndarray,
+    longitudes: np.ndarray,
+    values: np.ndarray,
+) -> None:
+    if latitudes.size == 0 or longitudes.size == 0:
+        raise ValueError(f"{config['label']} dataset is missing latitude or longitude coordinates.")
+
+    if latitudes.min() < BBOX["minimum_latitude"] - 0.5 or latitudes.max() > BBOX["maximum_latitude"] + 0.5:
+        raise ValueError(f"{config['label']} latitude coverage is outside the Baltic processing bounds.")
+    if longitudes.min() < BBOX["minimum_longitude"] - 0.5 or longitudes.max() > BBOX["maximum_longitude"] + 0.5:
+        raise ValueError(f"{config['label']} longitude coverage is outside the Baltic processing bounds.")
+
+    valid_values = values[np.isfinite(values)]
+    if valid_values.size == 0:
+        raise ValueError(f"{config['label']} contains no valid ocean values.")
+
+    plausible_min, plausible_max = config["plausible_range"]
+    if float(valid_values.min()) < plausible_min or float(valid_values.max()) > plausible_max:
+        raise ValueError(f"{config['label']} values are outside the plausible range {config['plausible_range']}.")
+
+    requested = pd.Timestamp(requested_time).tz_convert("UTC")
+    detected = pd.Timestamp(detected_time).tz_convert("UTC")
+    if abs((requested - detected).total_seconds()) > 3600:
+        raise ValueError(f"Downloaded timestamp {detected_time} does not match requested time {requested_time}.")
+
+
+def _download_timestamp(config: dict[str, Any], timestamp_iso: str, download_root: Path) -> FrameBundle:
+    frame_key = _frame_key(timestamp_iso)
+    condition_root = download_root / config["id"]
+    condition_root.mkdir(parents=True, exist_ok=True)
+    raw_path = condition_root / f"{frame_key}.nc"
+
+    copernicusmarine.subset(
+        dataset_id=config["dataset_id"],
+        variables=list(config["variables"]),
+        start_datetime=timestamp_iso,
+        end_datetime=timestamp_iso,
+        minimum_longitude=BBOX["minimum_longitude"],
+        maximum_longitude=BBOX["maximum_longitude"],
+        minimum_latitude=BBOX["minimum_latitude"],
+        maximum_latitude=BBOX["maximum_latitude"],
+        output_directory=condition_root,
+        output_filename=raw_path.name,
+        overwrite=True,
+        disable_progress_bar=True,
+    )
+
+    if not raw_path.exists():
+        raise FileNotFoundError(f"Copernicus download did not create {raw_path.name}.")
+
+    try:
+        with xr.open_dataset(raw_path) as dataset:
+            lat_name = _find_coordinate_name(dataset, ["latitude", "lat"])
+            lon_name = _find_coordinate_name(dataset, ["longitude", "lon"])
+            latitudes = dataset[lat_name].values.astype(np.float64)
+            longitudes = dataset[lon_name].values.astype(np.float64)
+            values, original_units, converted_from_kelvin, detected_time = _extract_values(dataset, config)
+
+        if latitudes[0] > latitudes[-1]:
+            latitudes = latitudes[::-1]
+            values = values[::-1, :]
+        if longitudes[0] > longitudes[-1]:
+            longitudes = longitudes[::-1]
+            values = values[:, ::-1]
+
+        _validate_frame(config, timestamp_iso, detected_time, latitudes, longitudes, values)
+        valid_values = values[np.isfinite(values)]
+        return FrameBundle(
+            key=frame_key,
+            time_utc=detected_time,
+            latitudes=latitudes,
+            longitudes=longitudes,
+            values=values,
+            min_value=round(float(valid_values.min()), 3),
+            max_value=round(float(valid_values.max()), 3),
+            original_units=original_units,
+            converted_from_kelvin=converted_from_kelvin,
+            raw_bytes=raw_path.stat().st_size,
+            source="downloaded",
+        )
+    finally:
+        if raw_path.exists():
+            raw_path.unlink()
+
+
+def _restore_frames(
+    config: dict[str, Any],
+    desired_times: list[str],
+    refresh_times: set[str],
+    previous_metadata: dict[str, Any] | None,
+    previous_query_index: dict[str, Any] | None,
+) -> list[FrameBundle]:
+    if not previous_metadata or not previous_query_index:
+        return []
+
+    latitudes = np.array(previous_query_index["latitudes"], dtype=np.float64)
+    longitudes = np.array(previous_query_index["longitudes"], dtype=np.float64)
+    values_key = previous_metadata.get("query_value_key", config["query_value_key"])
+    values_by_time = {
+        timestamp_iso: previous_query_index[values_key][index]
+        for index, timestamp_iso in enumerate(previous_query_index.get("times_utc", []))
+    }
+    frames_by_time = {frame["time_utc"]: frame for frame in previous_metadata.get("frames", [])}
+
+    restored: list[FrameBundle] = []
+    for timestamp_iso in desired_times:
+        if timestamp_iso in refresh_times or timestamp_iso not in values_by_time or timestamp_iso not in frames_by_time:
+            continue
+        grid = np.array(values_by_time[timestamp_iso], dtype=np.float32)
+        valid_values = grid[np.isfinite(grid)]
+        restored.append(
+            FrameBundle(
+                key=frames_by_time[timestamp_iso]["key"],
+                time_utc=timestamp_iso,
+                latitudes=latitudes,
+                longitudes=longitudes,
+                values=grid,
+                min_value=round(float(valid_values.min()), 3),
+                max_value=round(float(valid_values.max()), 3),
+                original_units=previous_metadata.get("provenance", {}).get("original_units", config["units"]),
+                converted_from_kelvin=bool(previous_metadata.get("provenance", {}).get("converted_from_kelvin", False)),
+                raw_bytes=0,
+                source="carried",
+            )
+        )
+    return restored
+
+
+def _resample_frame(
+    frame_values: np.ndarray,
+    latitudes: np.ndarray,
+    longitudes: np.ndarray,
+    level: dict[str, Any],
+) -> tuple[np.ndarray, np.ndarray, np.ndarray]:
+    values = frame_values
+    lats = latitudes
+    lons = longitudes
+    values, lats = _downsample_axis(values, lats, level["target_rows"], axis=0)
+    values, lons = _downsample_axis(values, lons, level["target_cols"], axis=1)
+    return values, lats, lons
+
+
+def _nearest_frame_index(time_values: list[str]) -> int:
+    current_utc = pd.Timestamp(_runtime_now())
+    return min(range(len(time_values)), key=lambda index: abs(pd.Timestamp(time_values[index]) - current_utc))
+
+
+def _write_tiles_for_frame(
+    condition_root: Path,
+    frame_key: str,
+    level_id: str,
+    tile_x: int,
+    tile_y: int,
+    tile_values: np.ndarray,
+    display_min: float,
+    display_max: float,
+    palette_names: list[str],
+    default_palette: str,
+) -> dict[str, int]:
+    level_root = condition_root / "tiles" / frame_key / level_id
+    sizes: dict[str, int] = {}
+    for palette_name in palette_names:
+        render_palette = palette_name if palette_name != "default" else default_palette
+        palette_root = level_root / palette_name
+        palette_root.mkdir(parents=True, exist_ok=True)
+        tile_path = palette_root / f"{tile_x}_{tile_y}.png"
+        _render_overlay(tile_values, display_min, display_max, render_palette).save(tile_path)
+        sizes[palette_name] = tile_path.stat().st_size
+    return sizes
+
+
+def _build_condition_outputs(
+    config: dict[str, Any],
+    frames: list[FrameBundle],
+    carried_forward_count: int,
+    downloaded_count: int,
+) -> dict[str, Any]:
+    frames = sorted(frames, key=lambda frame: pd.Timestamp(frame.time_utc))
+    condition_root = SITE_OCEAN_ROOT / config["id"]
+    first_frame = frames[0]
+    latitudes = first_frame.latitudes
+    longitudes = first_frame.longitudes
+    values_stack = np.stack([frame.values for frame in frames], axis=0)
+
+    if condition_root.exists():
+        shutil.rmtree(condition_root)
+    condition_root.mkdir(parents=True, exist_ok=True)
+    (condition_root / "tiles").mkdir(parents=True, exist_ok=True)
+
+    display_min, display_max = _nice_display_range(values_stack)
+    valid_mask = np.any(np.isfinite(values_stack), axis=0)
+    _build_land_mask(valid_mask).save(condition_root / LAND_MASK_FILENAME)
+
+    performance_levels: dict[str, dict[str, Any]] = {}
+    tile_size_accumulator = {
+        level["id"]: {palette_name: [] for palette_name in config["palettes"]}
+        for level in TEMPERATURE_TILE_LEVELS
+    }
+
+    for level in TEMPERATURE_TILE_LEVELS:
+        preview_values, preview_lats, preview_lons = _resample_frame(values_stack[0], latitudes, longitudes, level)
+        rows, cols = preview_values.shape
+        lat_step = float(np.median(np.diff(preview_lats))) if preview_lats.size > 1 else 0.05
+        lon_step = float(np.median(np.diff(preview_lons))) if preview_lons.size > 1 else 0.05
+        tiles_for_level: list[dict[str, Any]] = []
+        tile_y = 0
+        for row_start in range(0, rows, level["tile_rows"]):
+            row_end = min(row_start + level["tile_rows"], rows)
+            tile_x = 0
+            for col_start in range(0, cols, level["tile_cols"]):
+                col_end = min(col_start + level["tile_cols"], cols)
+                tiles_for_level.append(
+                    {
+                        "x": tile_x,
+                        "y": tile_y,
+                        "bbox": _tile_bounds(
+                            preview_lats[row_start:row_end],
+                            preview_lons[col_start:col_end],
+                            lat_step,
+                            lon_step,
+                        ),
+                        "row_start": row_start,
+                        "row_end": row_end,
+                        "column_start": col_start,
+                        "column_end": col_end,
+                        "rows": row_end - row_start,
+                        "columns": col_end - col_start,
+                    }
+                )
+                tile_x += 1
+            tile_y += 1
+
+        performance_levels[level["id"]] = {
+            "id": level["id"],
+            "zoom_min": level["zoom_min"],
+            "zoom_max": level["zoom_max"],
+            "rows": rows,
+            "columns": cols,
+            "tile_rows": level["tile_rows"],
+            "tile_cols": level["tile_cols"],
+            "preload_ring": level["preload_ring"],
+            "tile_count": len(tiles_for_level),
+            "tiles": tiles_for_level,
+            "average_tile_bytes": {},
+        }
+
+    frame_payloads: list[dict[str, Any]] = []
+    for frame_index, frame in enumerate(frames):
+        payload = {
+            "index": frame_index,
+            "key": frame.key,
+            "time_utc": frame.time_utc,
+            "tile_path": f"./data/ocean/{config['id']}/tiles/{frame.key}",
+            "display_label_local": pd.Timestamp(frame.time_utc)
+            .tz_convert(BALTIC_REGION["time_zone"])
+            .strftime("%a %d %b, %H:%M"),
+            "local_hour": _copenhagen_hour(frame.time_utc),
+            "is_night": _copenhagen_hour(frame.time_utc) >= 21 or _copenhagen_hour(frame.time_utc) < 5,
+        }
+        if config["id"] == "temperature":
+            payload["min_celsius"] = frame.min_value
+            payload["max_celsius"] = frame.max_value
+        else:
+            payload["min_value"] = frame.min_value
+            payload["max_value"] = frame.max_value
+        frame_payloads.append(payload)
+
+        for level in TEMPERATURE_TILE_LEVELS:
+            resampled_values, _level_lats, _level_lons = _resample_frame(frame.values, latitudes, longitudes, level)
+            for tile in performance_levels[level["id"]]["tiles"]:
+                tile_values = resampled_values[tile["row_start"] : tile["row_end"], tile["column_start"] : tile["column_end"]]
+                sizes = _write_tiles_for_frame(
+                    condition_root=condition_root,
+                    frame_key=frame.key,
+                    level_id=level["id"],
+                    tile_x=tile["x"],
+                    tile_y=tile["y"],
+                    tile_values=tile_values,
+                    display_min=display_min,
+                    display_max=display_max,
+                    palette_names=list(config["palettes"]),
+                    default_palette=str(config["default_palette"]),
+                )
+                if frame_index == 0:
+                    for palette_name, size_bytes in sizes.items():
+                        tile_size_accumulator[level["id"]][palette_name].append(size_bytes)
+
+    for level_id, palette_sizes in tile_size_accumulator.items():
+        performance_levels[level_id]["average_tile_bytes"] = {
+            palette_name: round(float(np.mean(values)), 1) if values else 0.0
+            for palette_name, values in palette_sizes.items()
+        }
+
+    query_index_payload = {
+        "latitudes": [round(float(value), 6) for value in latitudes.tolist()],
+        "longitudes": [round(float(value), 6) for value in longitudes.tolist()],
+        "times_utc": [frame.time_utc for frame in frames],
+        "frame_keys": [frame.key for frame in frames],
+        config["query_value_key"]: [
+            [
+                [None if not np.isfinite(value) else round(float(value), 4) for value in row]
+                for row in frame.values.tolist()
+            ]
+            for frame in frames
+        ],
+    }
+    (condition_root / QUERY_INDEX_NAME).write_text(json.dumps(query_index_payload), encoding="utf-8")
+
+    initial_frame_index = _nearest_frame_index([frame.time_utc for frame in frames])
+    level_byte_totals = {
+        level_id: sum(
+            (
+                condition_root / "tiles" / frame_payloads[initial_frame_index]["key"] / level_id / list(config["palettes"])[0] / f"{tile['x']}_{tile['y']}.png"
+            ).stat().st_size
+            for tile in level_payload["tiles"]
+        )
+        for level_id, level_payload in performance_levels.items()
+    }
+
+    metadata_payload: dict[str, Any] = {
+        "condition": ocean_condition_definitions()[config["id"]],
+        "available": True,
+        "query_value_key": config["query_value_key"],
+        "query_index_url": f"./data/ocean/{config['id']}/{QUERY_INDEX_NAME}",
+        "layer": {
+            "id": config["id"],
+            "label": config["label"],
+            "variable": config["variable"],
+        },
+        "provenance": {
+            "source": "Copernicus Marine",
+            "product_id": config["product_id"],
+            "dataset_id": config["dataset_id"],
+            "type": config["dataset_type"],
+            "retrieved_at_utc": _runtime_now().isoformat(),
+            "requested_start_utc": frames[0].time_utc,
+            "requested_end_utc": frames[-1].time_utc,
+            "original_units": frames[0].original_units,
+            "display_units": config["units"],
+            "converted_from_kelvin": frames[0].converted_from_kelvin,
+        },
+        "region": {
+            "name": BALTIC_REGION["name"],
+            "bbox": BBOX,
+            "initial_view": INITIAL_VIEW,
+            "max_bounds": BALTIC_REGION["max_bounds"],
+            "time_zone": BALTIC_REGION["time_zone"],
+        },
+        "fallback": {
+            "land_mask_url": f"./data/ocean/{config['id']}/land_mask.png",
+            "land_opacity": 0.96,
+            "background_color": "#07111d",
+            "land_mask_coordinates": [
+                [BBOX["minimum_longitude"], BBOX["maximum_latitude"]],
+                [BBOX["maximum_longitude"], BBOX["maximum_latitude"]],
+                [BBOX["maximum_longitude"], BBOX["minimum_latitude"]],
+                [BBOX["minimum_longitude"], BBOX["minimum_latitude"]],
+            ],
+        },
+        "tiling": {
+            "palettes": list(config["palettes"]),
+            "tile_root_url": f"./data/ocean/{config['id']}/tiles",
+            "levels": list(performance_levels.values()),
+        },
+        "frames": frame_payloads,
+        "initial_frame_index": initial_frame_index,
+        "availableTimes": [frame.time_utc for frame in frames],
+        "files": {
+            "metadata_url": f"./data/ocean/{config['id']}/manifest.json",
+            "land_mask_filename": LAND_MASK_FILENAME,
+            "query_index_filename": QUERY_INDEX_NAME,
+        },
+        "performance": {
+            "raw_source_bytes_refreshed": sum(frame.raw_bytes for frame in frames if frame.source == "downloaded"),
+            "processed_level_bytes": level_byte_totals,
+            "average_tile_bytes": {
+                level_id: performance_levels[level_id]["average_tile_bytes"].get(list(config["palettes"])[0], 0.0)
+                for level_id in performance_levels
+            },
+            "initial_overview_request_count": performance_levels["overview"]["tile_count"],
+            "estimated_browser_memory_mb": round(
+                (performance_levels["overview"]["rows"] * performance_levels["overview"]["columns"] * 4) / 1_000_000,
+                2,
+            ),
+            "carried_forward_timestamps": carried_forward_count,
+            "downloaded_timestamps": downloaded_count,
+            "runner_limits": {
+                "temporary_disk_gb": MAX_TEMPORARY_DISK_GB,
+                "ram_gb": MAX_RUNNER_RAM_GB,
+            },
+        },
+    }
+    if config["id"] == "temperature":
+        metadata_payload["value_range_celsius"] = {
+            "min": round(float(np.nanmin(values_stack)), 3),
+            "max": round(float(np.nanmax(values_stack)), 3),
+            "display_min": display_min,
+            "display_max": display_max,
+        }
+    else:
+        metadata_payload["value_range"] = {
+            "min": round(float(np.nanmin(values_stack)), 3),
+            "max": round(float(np.nanmax(values_stack)), 3),
+            "display_min": display_min,
+            "display_max": display_max,
+        }
+    (condition_root / MANIFEST_NAME).write_text(json.dumps(metadata_payload, indent=2), encoding="utf-8")
+    return metadata_payload
+
+
+def _write_root_manifest(available_metadata: dict[str, dict[str, Any]]) -> None:
+    definitions = ocean_condition_definitions()
+    conditions: list[dict[str, Any]] = []
+    for condition_id in OCEAN_CONDITION_ORDER:
+        definition = definitions[condition_id]
+        metadata = available_metadata.get(condition_id)
+        if metadata:
+            conditions.append(
+                {
+                    "id": definition["id"],
+                    "label": definition["label"],
+                    "available": True,
+                    "condition": definition,
+                    "metadata": metadata,
+                }
+            )
+        else:
+            conditions.append(
+                {
+                    "id": definition["id"],
+                    "label": definition["label"],
+                    "available": False,
+                    "condition": definition,
+                }
+            )
+
+    default_condition = next((condition_id for condition_id in OCEAN_CONDITION_ORDER if condition_id in available_metadata), "temperature")
+    region = available_metadata.get(default_condition, {}).get(
+        "region",
+        {
+            "name": BALTIC_REGION["name"],
+            "bbox": BALTIC_REGION["bbox"],
+            "initial_view": INITIAL_VIEW,
+            "max_bounds": BALTIC_REGION["max_bounds"],
+            "time_zone": BALTIC_REGION["time_zone"],
+        },
+    )
+    SITE_OCEAN_ROOT.mkdir(parents=True, exist_ok=True)
+    (SITE_OCEAN_ROOT / MANIFEST_NAME).write_text(
+        json.dumps(
+            {
+                "region": region,
+                "default_condition_id": default_condition,
+                "conditions": conditions,
+                "generated_at_utc": _runtime_now().isoformat(),
+            },
+            indent=2,
+        ),
+        encoding="utf-8",
+    )
+
+
+def _update_condition(config: dict[str, Any], site_url: str | None, force_full_refresh: bool) -> dict[str, Any] | None:
+    previous_metadata, previous_query_index = _previous_condition_state(config["id"], site_url)
+    available_times = _available_times(str(config["dataset_id"]))
+    desired_times = _desired_times(config, available_times)
+    existing_times = set(previous_metadata.get("availableTimes", [])) if previous_metadata else set()
+
+    refresh_cutoff = _runtime_now() - timedelta(hours=int(config["refresh_hours"]))
+    refresh_times = {
+        timestamp_iso
+        for timestamp_iso in desired_times
+        if force_full_refresh
+        or timestamp_iso not in existing_times
+        or pd.Timestamp(timestamp_iso).tz_convert("UTC").to_pydatetime() >= refresh_cutoff
+    }
+    timestamps_to_remove = existing_times.difference(desired_times)
+
+    if not refresh_times and not timestamps_to_remove and existing_times == set(desired_times):
+        _log(f"{config['label']}: No new Copernicus data.")
+        return previous_metadata
+
+    restored_frames = _restore_frames(
+        config=config,
+        desired_times=desired_times,
+        refresh_times=refresh_times,
+        previous_metadata=previous_metadata,
+        previous_query_index=previous_query_index,
+    )
+
+    downloaded_frames: list[FrameBundle] = []
+    download_root = TEMPORARY_WORK_ROOT / "downloads"
+    for timestamp_iso in desired_times:
+        if timestamp_iso not in refresh_times:
+            continue
+        frame = _download_timestamp(config, timestamp_iso, download_root)
+        downloaded_frames.append(frame)
+        _log(f"{config['label']}: processed {frame.time_utc}")
+
+    frames = restored_frames + downloaded_frames
+    if not frames:
+        return previous_metadata
+
+    metadata = _build_condition_outputs(
+        config=config,
+        frames=frames,
+        carried_forward_count=len(restored_frames),
+        downloaded_count=len(downloaded_frames),
+    )
+
+    _log(f"{config['label']}: carried {len(restored_frames)}, downloaded {len(downloaded_frames)}")
+    return metadata
+
+
+def update_all_conditions(site_url: str | None, force_full_refresh: bool = False) -> None:
+    load_dotenv()
+    _ensure_copernicus_environment()
+    if TEMPORARY_WORK_ROOT.exists():
+        shutil.rmtree(TEMPORARY_WORK_ROOT)
+    TEMPORARY_WORK_ROOT.mkdir(parents=True, exist_ok=True)
+
+    available_metadata: dict[str, dict[str, Any]] = {}
+    for condition_id in OCEAN_CONDITION_ORDER:
+        config = OCEAN_DATASETS.get(condition_id)
+        if not config:
+            continue
+        try:
+            metadata = _update_condition(config, site_url, force_full_refresh)
+            if metadata:
+                available_metadata[condition_id] = metadata
+        except Exception as exc:
+            _log(f"{config['label']}: update failed, keeping previous valid data if available. Reason: {exc}")
+            previous_metadata, previous_query_index = _previous_condition_state(condition_id, site_url)
+            if previous_metadata and previous_query_index:
+                preserved_frames = _restore_frames(
+                    config=config,
+                    desired_times=list(previous_metadata.get("availableTimes", [])),
+                    refresh_times=set(),
+                    previous_metadata=previous_metadata,
+                    previous_query_index=previous_query_index,
+                )
+                if preserved_frames:
+                    available_metadata[condition_id] = _build_condition_outputs(
+                        config=config,
+                        frames=preserved_frames,
+                        carried_forward_count=len(preserved_frames),
+                        downloaded_count=0,
+                    )
+
+    _write_root_manifest(available_metadata)
+    if TEMPORARY_WORK_ROOT.exists():
+        shutil.rmtree(TEMPORARY_WORK_ROOT)
+
+
+def main() -> None:
+    parser = argparse.ArgumentParser(
+        description="Update all Digital Baltic Sea Copernicus ocean-condition assets in small condition/timestep batches."
+    )
+    parser.add_argument(
+        "--site-url",
+        default=None,
+        help="Current deployed site URL, used to inspect already-published data before downloading only new timestamps.",
+    )
+    parser.add_argument(
+        "--force-full-refresh",
+        action="store_true",
+        help="Re-download every timestamp in the configured operational window for every condition.",
+    )
+    args = parser.parse_args()
+
+    update_all_conditions(
+        site_url=_resolve_site_url(args.site_url),
+        force_full_refresh=args.force_full_refresh,
+    )
+
+
+if __name__ == "__main__":
+    main()

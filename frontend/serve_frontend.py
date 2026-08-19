@@ -2,31 +2,32 @@ from __future__ import annotations
 
 from http.server import SimpleHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
-from urllib.parse import urlparse
-
-from dotenv import load_dotenv
 
 PROJECT_ROOT = Path(__file__).resolve().parents[1]
+SITE_ROOT = PROJECT_ROOT / "site"
 HOST = "127.0.0.1"
 PORT = 8000
 
 
-class FrontendHandler(SimpleHTTPRequestHandler):
+class SiteHandler(SimpleHTTPRequestHandler):
     def __init__(self, *args, **kwargs):
-        super().__init__(*args, directory=str(PROJECT_ROOT), **kwargs)
+        super().__init__(*args, directory=str(SITE_ROOT), **kwargs)
 
-    def do_GET(self) -> None:  # noqa: N802 - inherited interface
-        parsed = urlparse(self.path)
-        if parsed.path == "/":
-            self.path = "/frontend/"
-
-        super().do_GET()
+    def end_headers(self) -> None:
+        self.send_header("Cache-Control", "no-store, no-cache, must-revalidate, max-age=0")
+        self.send_header("Pragma", "no-cache")
+        self.send_header("Expires", "0")
+        super().end_headers()
 
 
 def main() -> None:
-    load_dotenv(PROJECT_ROOT / ".env")
-    server = ThreadingHTTPServer((HOST, PORT), FrontendHandler)
-    print(f"Serving Copenhagen Sea Live at http://{HOST}:{PORT}/frontend/")
+    if not SITE_ROOT.exists():
+        raise FileNotFoundError(
+            "The built site directory does not exist yet. Run `python scripts/build_site.py` first."
+        )
+
+    server = ThreadingHTTPServer((HOST, PORT), SiteHandler)
+    print(f"Serving Digital Baltic at http://{HOST}:{PORT}/")
     try:
         server.serve_forever()
     except KeyboardInterrupt:

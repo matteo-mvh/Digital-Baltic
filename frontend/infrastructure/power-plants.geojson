@@ -1,0 +1,80 @@
+{
+  "type": "FeatureCollection",
+  "features": [
+    {
+      "type": "Feature",
+      "properties": {
+        "category": "powerPlants",
+        "name": "Avedore Power Station",
+        "country": "Denmark",
+        "energy_source": "Biomass and multi-fuel CHP",
+        "capacity": "Approx. 810 MW electric",
+        "status": "Operating",
+        "source_name": "European coastal energy reference bundle",
+        "source_url": "https://energy.ec.europa.eu/",
+        "license": "Public reference data / curated prototype bundle"
+      },
+      "geometry": { "type": "Point", "coordinates": [12.477, 55.616] }
+    },
+    {
+      "type": "Feature",
+      "properties": {
+        "category": "powerPlants",
+        "name": "Forsmark Nuclear Power Plant",
+        "country": "Sweden",
+        "energy_source": "Nuclear",
+        "capacity": "Approx. 3,300 MW electric",
+        "status": "Operating",
+        "source_name": "European coastal energy reference bundle",
+        "source_url": "https://energy.ec.europa.eu/",
+        "license": "Public reference data / curated prototype bundle"
+      },
+      "geometry": { "type": "Point", "coordinates": [18.171, 60.406] }
+    },
+    {
+      "type": "Feature",
+      "properties": {
+        "category": "powerPlants",
+        "name": "Olkiluoto Nuclear Power Plant",
+        "country": "Finland",
+        "energy_source": "Nuclear",
+        "capacity": "Approx. 4,300 MW electric",
+        "status": "Operating",
+        "source_name": "European coastal energy reference bundle",
+        "source_url": "https://energy.ec.europa.eu/",
+        "license": "Public reference data / curated prototype bundle"
+      },
+      "geometry": { "type": "Point", "coordinates": [21.379, 61.237] }
+    },
+    {
+      "type": "Feature",
+      "properties": {
+        "category": "powerPlants",
+        "name": "Karlshamn Power Station",
+        "country": "Sweden",
+        "energy_source": "Oil-fired reserve generation",
+        "capacity": "Approx. 1,000 MW electric",
+        "status": "Strategic reserve / limited operation",
+        "source_name": "European coastal energy reference bundle",
+        "source_url": "https://energy.ec.europa.eu/",
+        "license": "Public reference data / curated prototype bundle"
+      },
+      "geometry": { "type": "Point", "coordinates": [14.855, 56.166] }
+    },
+    {
+      "type": "Feature",
+      "properties": {
+        "category": "powerPlants",
+        "name": "Vuosaari C Power Plant",
+        "country": "Finland",
+        "energy_source": "Gas-fired CHP",
+        "capacity": "Approx. 630 MW electric",
+        "status": "Operating",
+        "source_name": "European coastal energy reference bundle",
+        "source_url": "https://energy.ec.europa.eu/",
+        "license": "Public reference data / curated prototype bundle"
+      },
+      "geometry": { "type": "Point", "coordinates": [25.186, 60.208] }
+    }
+  ]
+}

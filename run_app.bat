@@ -10,14 +10,16 @@ if exist "%RUNTIME_PY%" (
   set "PYTHON_EXE=python"
 )
 
-echo Starting Copenhagen Sea Live frontend...
+echo Building and starting Digital Baltic...
 echo.
-echo If you have not generated data yet, run:
-echo   %PYTHON_EXE% data_pipeline\download_temperature.py
+echo The local preview now matches the GitHub Pages static deployment.
+echo If you want fresh Copernicus SST data first, run:
+echo   %PYTHON_EXE% scripts\update_copernicus.py
 echo.
 echo Opening:
-echo   http://127.0.0.1:8000/frontend/
+echo   http://127.0.0.1:8000/
 echo.
-start "" "http://127.0.0.1:8000/frontend/"
 cd /d "%PROJECT_DIR%"
+start "" "http://127.0.0.1:8000/"
+"%PYTHON_EXE%" scripts\build_site.py
 "%PYTHON_EXE%" frontend\serve_frontend.py

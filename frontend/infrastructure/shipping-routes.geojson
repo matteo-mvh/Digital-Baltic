@@ -1,0 +1,57 @@
+{
+  "type": "FeatureCollection",
+  "features": [
+    {
+      "type": "Feature",
+      "properties": {
+        "category": "shipping",
+        "name": "Oresund corridor",
+        "role": "North Sea - Baltic entrance",
+        "traffic": "Very high ferry and cargo traffic",
+        "source_name": "Baltic shipping corridor sketch layer",
+        "source_url": "https://helcom.fi/",
+        "license": "Public reference data / curated prototype bundle"
+      },
+      "geometry": { "type": "LineString", "coordinates": [[12.25,56.0],[12.45,55.85],[12.6,55.7],[12.85,55.5],[13.2,55.25]] }
+    },
+    {
+      "type": "Feature",
+      "properties": {
+        "category": "shipping",
+        "name": "Bornholm Deep route",
+        "role": "Central Baltic cargo corridor",
+        "traffic": "High east-west tanker and container traffic",
+        "source_name": "Baltic shipping corridor sketch layer",
+        "source_url": "https://helcom.fi/",
+        "license": "Public reference data / curated prototype bundle"
+      },
+      "geometry": { "type": "LineString", "coordinates": [[13.1,55.1],[14.6,55.05],[16.3,55.05],[18.0,55.12],[20.2,55.3]] }
+    },
+    {
+      "type": "Feature",
+      "properties": {
+        "category": "shipping",
+        "name": "Gulf of Finland corridor",
+        "role": "Helsinki - Tallinn - St Petersburg axis",
+        "traffic": "Very high passenger and cargo traffic",
+        "source_name": "Baltic shipping corridor sketch layer",
+        "source_url": "https://helcom.fi/",
+        "license": "Public reference data / curated prototype bundle"
+      },
+      "geometry": { "type": "LineString", "coordinates": [[24.6,59.6],[24.95,59.9],[25.4,60.05],[27.5,60.05],[29.7,59.95]] }
+    },
+    {
+      "type": "Feature",
+      "properties": {
+        "category": "shipping",
+        "name": "Stockholm - Aland lane",
+        "role": "Passenger and ro-ro corridor",
+        "traffic": "Dense scheduled ferry traffic",
+        "source_name": "Baltic shipping corridor sketch layer",
+        "source_url": "https://helcom.fi/",
+        "license": "Public reference data / curated prototype bundle"
+      },
+      "geometry": { "type": "LineString", "coordinates": [[18.1,59.3],[18.75,59.55],[19.45,59.8],[20.15,60.05]] }
+    }
+  ]
+}

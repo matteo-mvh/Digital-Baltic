@@ -1,0 +1,75 @@
+{
+  "overlay": {
+    "name": "Coastal & Marine Infrastructure",
+    "source_summary": "Curated Baltic infrastructure prototype",
+    "source_detail": "Open-data prototype bundle combining Baltic infrastructure references with OpenStreetMap-aligned land-use context.",
+    "documentation_url": "./infrastructure/README.md",
+    "updated_at": "2026-08-19",
+    "license_note": "Mixed open licences and public-reference data. See the accompanying README for dataset notes."
+  },
+  "categories": [
+    {
+      "id": "ports",
+      "name": "Ports & harbours",
+      "url": "./infrastructure/ports.geojson",
+      "source_name": "OpenStreetMap-aligned prototype references",
+      "source_url": "https://www.openstreetmap.org/",
+      "license": "ODbL / curated prototype bundle",
+      "last_updated": "2026-08-19"
+    },
+    {
+      "id": "powerPlants",
+      "name": "Power plants",
+      "url": "./infrastructure/power-plants.geojson",
+      "source_name": "European coastal energy reference bundle",
+      "source_url": "https://energy.ec.europa.eu/",
+      "license": "Public reference data / curated prototype bundle",
+      "last_updated": "2026-08-19"
+    },
+    {
+      "id": "windFarms",
+      "name": "Offshore wind farms",
+      "url": "./infrastructure/wind-farms.geojson",
+      "source_name": "Marine energy project references",
+      "source_url": "https://emodnet.ec.europa.eu/",
+      "license": "Open public reference data / curated prototype bundle",
+      "last_updated": "2026-08-19"
+    },
+    {
+      "id": "cables",
+      "name": "Submarine cables",
+      "url": "./infrastructure/cables.geojson",
+      "source_name": "Baltic interconnector references",
+      "source_url": "https://www.entsoe.eu/",
+      "license": "Public network reference data / curated prototype bundle",
+      "last_updated": "2026-08-19"
+    },
+    {
+      "id": "pipelines",
+      "name": "Pipelines",
+      "url": "./infrastructure/pipelines.geojson",
+      "source_name": "Baltic offshore pipeline references",
+      "source_url": "https://emodnet.ec.europa.eu/",
+      "license": "Public reference data / curated prototype bundle",
+      "last_updated": "2026-08-19"
+    },
+    {
+      "id": "shipping",
+      "name": "Shipping routes",
+      "url": "./infrastructure/shipping-routes.geojson",
+      "source_name": "Baltic shipping corridor sketch layer",
+      "source_url": "https://helcom.fi/",
+      "license": "Public reference data / curated prototype bundle",
+      "last_updated": "2026-08-19"
+    },
+    {
+      "id": "landUse",
+      "name": "General land use",
+      "url": "./infrastructure/land-use.geojson",
+      "source_name": "OpenStreetMap-aligned land-use context",
+      "source_url": "https://www.openstreetmap.org/",
+      "license": "ODbL / curated prototype bundle",
+      "last_updated": "2026-08-19"
+    }
+  ]
+}

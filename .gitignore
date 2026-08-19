@@ -1,12 +1,20 @@
 .env
+.env.*
+!.env.example
 .venv/
 __pycache__/
 *.pyc
+node_modules/
+dist/
+.cache/
+tmp/
+site/
+*.nc
+*.netcdf
 
 data/raw/*
 !data/raw/.gitkeep
-data/processed/latest/*
+data/processed/**
 !data/processed/.gitkeep
 
 frontend/.server-cache/
-

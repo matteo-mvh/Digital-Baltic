@@ -3,7 +3,7 @@ from __future__ import annotations
 import argparse
 import json
 import sys
-from datetime import datetime, timezone
+from datetime import datetime, timedelta, timezone
 from pathlib import Path
 
 import pandas as pd
@@ -29,20 +29,42 @@ from data_pipeline.config import (
 from data_pipeline.process_temperature import process_temperature_dataset
 
 
-def _latest_available_time() -> datetime:
+FORECAST_HORIZON = timedelta(days=2)
+
+
+def _available_times() -> pd.DatetimeIndex:
     remote = copernicusmarine.open_dataset(dataset_id=DATASET_ID)
     try:
         if "time" not in remote.coords:
             raise RuntimeError(f"Dataset {DATASET_ID} does not expose a time coordinate.")
-        latest = pd.to_datetime(remote["time"].values[-1], utc=True).to_pydatetime()
-        return latest.astimezone(timezone.utc)
+        return pd.to_datetime(remote["time"].values, utc=True)
     finally:
         close_method = getattr(remote, "close", None)
         if callable(close_method):
             close_method()
 
 
-def _write_download_metadata(latest_data_time: datetime) -> None:
+def _select_time_window(available_times: pd.DatetimeIndex) -> tuple[datetime, datetime, list[str]]:
+    now_utc = datetime.now(timezone.utc)
+    current_or_future = available_times[available_times >= now_utc]
+
+    if len(current_or_future) > 0:
+        start_time = current_or_future[0].to_pydatetime()
+    else:
+        nearest_index = int((available_times - now_utc).to_series().abs().argmin())
+        start_time = available_times[nearest_index].to_pydatetime()
+
+    horizon_end = start_time + FORECAST_HORIZON
+    selected = available_times[(available_times >= start_time) & (available_times <= horizon_end)]
+    if len(selected) == 0:
+        selected = pd.DatetimeIndex([pd.Timestamp(start_time)])
+
+    end_time = selected[-1].to_pydatetime()
+    selected_iso = [timestamp.to_pydatetime().astimezone(timezone.utc).isoformat() for timestamp in selected]
+    return start_time.astimezone(timezone.utc), end_time.astimezone(timezone.utc), selected_iso
+
+
+def _write_download_metadata(start_time: datetime, end_time: datetime, selected_times: list[str]) -> None:
     payload = {
         "product_id": PRODUCT_ID,
         "dataset_id": DATASET_ID,
@@ -50,28 +72,33 @@ def _write_download_metadata(latest_data_time: datetime) -> None:
         "layer_label": LAYER_LABEL,
         "dataset_type": DATASET_TYPE,
         "bbox": BBOX,
-        "data_time_utc": latest_data_time.isoformat(),
+        "requested_start_utc": start_time.isoformat(),
+        "requested_end_utc": end_time.isoformat(),
+        "selected_times_utc": selected_times,
         "retrieved_at_utc": datetime.now(timezone.utc).isoformat(),
         "raw_file": RAW_DATA_FILENAME,
     }
     raw_download_metadata_path().write_text(json.dumps(payload, indent=2), encoding="utf-8")
 
 
-def download_latest_temperature(run_processing: bool = True) -> None:
+def download_temperature_window(run_processing: bool = True) -> None:
     load_dotenv()
     ensure_directories()
 
-    latest_time = _latest_available_time()
+    available_times = _available_times()
+    start_time, end_time, selected_times = _select_time_window(available_times)
     raw_path = raw_dataset_path()
 
-    print(f"Latest available Copernicus time: {latest_time.isoformat()}")
-    print(f"Downloading {TEMPERATURE_VARIABLE} from {DATASET_ID} for the Copenhagen/Oresund box...")
+    print(f"Current UTC time: {datetime.now(timezone.utc).isoformat()}")
+    print(f"Selected forecast window: {start_time.isoformat()} to {end_time.isoformat()}")
+    print(f"Selected {len(selected_times)} dataset time steps from {DATASET_ID}")
+    print(f"Downloading {TEMPERATURE_VARIABLE} for the Baltic Sea subset...")
 
     copernicusmarine.subset(
         dataset_id=DATASET_ID,
         variables=[TEMPERATURE_VARIABLE],
-        start_datetime=latest_time.isoformat(),
-        end_datetime=latest_time.isoformat(),
+        start_datetime=start_time.isoformat(),
+        end_datetime=end_time.isoformat(),
         minimum_longitude=BBOX["minimum_longitude"],
         maximum_longitude=BBOX["maximum_longitude"],
         minimum_latitude=BBOX["minimum_latitude"],
@@ -82,7 +109,7 @@ def download_latest_temperature(run_processing: bool = True) -> None:
         disable_progress_bar=True,
     )
 
-    _write_download_metadata(latest_time)
+    _write_download_metadata(start_time, end_time, selected_times)
     print(f"Saved raw subset to {raw_path}")
 
     if run_processing:
@@ -90,16 +117,17 @@ def download_latest_temperature(run_processing: bool = True) -> None:
 
 
 def main() -> None:
-    parser = argparse.ArgumentParser(description="Download the latest Oresund sea-surface temperature field.")
+    parser = argparse.ArgumentParser(
+        description="Download the current-to-two-days-ahead Baltic Sea surface-temperature forecast window."
+    )
     parser.add_argument(
         "--skip-processing",
         action="store_true",
         help="Download the raw NetCDF subset without generating frontend assets.",
     )
     args = parser.parse_args()
-    download_latest_temperature(run_processing=not args.skip_processing)
+    download_temperature_window(run_processing=not args.skip_processing)
 
 
 if __name__ == "__main__":
     main()
-

@@ -1,0 +1,77 @@
+{
+  "type": "FeatureCollection",
+  "features": [
+    {
+      "type": "Feature",
+      "properties": {
+        "category": "windFarms",
+        "name": "Middelgrunden",
+        "country": "Denmark",
+        "status": "Operating",
+        "capacity": "40 MW",
+        "turbines": "20",
+        "source_name": "Marine energy project references",
+        "source_url": "https://emodnet.ec.europa.eu/",
+        "license": "Open public reference data / curated prototype bundle"
+      },
+      "geometry": {
+        "type": "Polygon",
+        "coordinates": [[[12.705,55.706],[12.742,55.705],[12.748,55.723],[12.708,55.724],[12.705,55.706]]]
+      }
+    },
+    {
+      "type": "Feature",
+      "properties": {
+        "category": "windFarms",
+        "name": "Kriegers Flak",
+        "country": "Denmark",
+        "status": "Operating",
+        "capacity": "604 MW",
+        "turbines": "72",
+        "source_name": "Marine energy project references",
+        "source_url": "https://emodnet.ec.europa.eu/",
+        "license": "Open public reference data / curated prototype bundle"
+      },
+      "geometry": {
+        "type": "Polygon",
+        "coordinates": [[[12.82,55.01],[13.18,55.01],[13.18,55.18],[12.82,55.18],[12.82,55.01]]]
+      }
+    },
+    {
+      "type": "Feature",
+      "properties": {
+        "category": "windFarms",
+        "name": "Baltic 2",
+        "country": "Germany",
+        "status": "Operating",
+        "capacity": "288 MW",
+        "turbines": "80",
+        "source_name": "Marine energy project references",
+        "source_url": "https://emodnet.ec.europa.eu/",
+        "license": "Open public reference data / curated prototype bundle"
+      },
+      "geometry": {
+        "type": "Polygon",
+        "coordinates": [[[13.95,54.87],[14.2,54.87],[14.2,55.01],[13.95,55.01],[13.95,54.87]]]
+      }
+    },
+    {
+      "type": "Feature",
+      "properties": {
+        "category": "windFarms",
+        "name": "Tahkoluoto",
+        "country": "Finland",
+        "status": "Operating",
+        "capacity": "44 MW",
+        "turbines": "11",
+        "source_name": "Marine energy project references",
+        "source_url": "https://emodnet.ec.europa.eu/",
+        "license": "Open public reference data / curated prototype bundle"
+      },
+      "geometry": {
+        "type": "Polygon",
+        "coordinates": [[[21.44,61.60],[21.57,61.60],[21.57,61.66],[21.44,61.66],[21.44,61.60]]]
+      }
+    }
+  ]
+}

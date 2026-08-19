@@ -1,0 +1,64 @@
+{
+  "dataset": {
+    "id": "digital-baltic-underwater-noise",
+    "title": "Digital Baltic Sea — Underwater Noise Pollution",
+    "version": "2026-08-19",
+    "bbox_wgs84": [9.0, 53.0, 31.5, 66.0],
+    "crs": "EPSG:4326",
+    "overlay_label": "Underwater Noise",
+    "description": "Source manifest for Baltic Sea underwater noise separating continuous pressure, impulsive events, impulsive pressure, and ecological impact layers."
+  },
+  "layers": [
+    {
+      "id": "continuous_noise_pressure_holas3",
+      "label": "Continuous noise",
+      "group": "continuous",
+      "render_type": "raster_arcgis_export",
+      "source": "HELCOM HOLAS 3 / HELCOM MADS",
+      "period": "2016-2021 assessment; representative modelling year 2018",
+      "tile_template": "https://maps.helcom.fi/arcgis/rest/services/MADS/Pressures/MapServer/export?bbox={bbox-epsg-3857}&bboxSR=3857&imageSR=3857&size=256,256&format=png32&transparent=true&layers=show:201&f=image",
+      "units": "normalized/assessment pressure value (not dB)",
+      "attribution": "HELCOM"
+    },
+    {
+      "id": "impulsive_noise_events_points",
+      "label": "Noise events",
+      "group": "impulsive",
+      "render_type": "vector_arcgis_query",
+      "source": "HELCOM HOLAS 3 / HELCOM-OSPAR impulsive noise register",
+      "period": "2016-2021",
+      "query_url": "https://maps.helcom.fi/arcgis/rest/services/MADS/Indicators_and_assessments/MapServer/413/query?where=1%3D1&outFields=*&returnGeometry=true&outSR=4326&f=geojson"
+    },
+    {
+      "id": "impulsive_noise_events_polygons",
+      "label": "Noise event areas",
+      "group": "impulsive",
+      "render_type": "vector_arcgis_query",
+      "source": "HELCOM HOLAS 3 / HELCOM-OSPAR impulsive noise register",
+      "period": "2016-2021",
+      "query_url": "https://maps.helcom.fi/arcgis/rest/services/MADS/Indicators_and_assessments/MapServer/412/query?where=1%3D1&outFields=*&returnGeometry=true&outSR=4326&f=geojson"
+    },
+    {
+      "id": "impulsive_noise_pressure_holas3",
+      "label": "Impulsive noise pressure",
+      "group": "impulsive",
+      "render_type": "raster_arcgis_export",
+      "source": "HELCOM HOLAS 3 / HELCOM-OSPAR impulsive noise register",
+      "period": "2016-2021",
+      "tile_template": "https://maps.helcom.fi/arcgis/rest/services/MADS/Pressures/MapServer/export?bbox={bbox-epsg-3857}&bboxSR=3857&imageSR=3857&size=256,256&format=png32&transparent=true&layers=show:202&f=image",
+      "units": "normalized pressure index",
+      "attribution": "HELCOM HOLAS 3 Dataset (2023)"
+    },
+    {
+      "id": "continuous_noise_ecological_effect",
+      "label": "Noise impact on mobile species",
+      "group": "impact",
+      "render_type": "raster_arcgis_export",
+      "source": "HELCOM HOLAS 3 SPIA",
+      "period": "2016-2021",
+      "tile_template": "https://maps.helcom.fi/arcgis/rest/services/MADS/Pressures/MapServer/export?bbox={bbox-epsg-3857}&bboxSR=3857&imageSR=3857&size=256,256&format=png32&transparent=true&layers=show:223&f=image",
+      "units": "relative cumulative potential-impact index",
+      "attribution": "HELCOM"
+    }
+  ]
+}

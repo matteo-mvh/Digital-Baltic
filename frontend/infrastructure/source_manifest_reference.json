@@ -1,0 +1,117 @@
+{
+  "dataset": {
+    "id": "digital-baltic-marine-infrastructure",
+    "title": "Digital Baltic Sea — Marine Infrastructure",
+    "version": "2026-08-19",
+    "crs": "EPSG:4326",
+    "bbox_wgs84": [9.0, 53.0, 31.5, 66.0],
+    "overlay_label": "Coastal & Marine Infrastructure",
+    "description": "Source-driven Baltic Sea infrastructure bundle. Vector layers are intended to be downloaded/preprocessed to GeoJSON; shipping is intended to be rendered from EMODnet WMS. Land use is kept as a separate large raster/vector source.",
+    "normalized_properties": [
+      "infra_category",
+      "infra_subtype",
+      "name",
+      "status",
+      "country",
+      "operator",
+      "capacity_mw",
+      "start_year",
+      "source",
+      "source_layer",
+      "source_id",
+      "source_url"
+    ]
+  },
+  "layers": [
+    {
+      "id": "ports",
+      "label": "Ports & harbours",
+      "category": "ports",
+      "mode": "vector_wfs",
+      "default_visible": true,
+      "source": "EMODnet Human Activities / Eurostat",
+      "metadata_url": "https://emodnet.ec.europa.eu/geonetwork/srv/api/records/379d0425-8924-4a41-a088-1a002d2ea748",
+      "revision": "2025-12-10",
+      "license": "CC BY 4.0"
+    },
+    {
+      "id": "offshore_wind",
+      "label": "Offshore wind farms",
+      "category": "wind_farms",
+      "mode": "vector_wfs",
+      "default_visible": true,
+      "source": "EMODnet Human Activities",
+      "metadata_url": "https://emodnet.ec.europa.eu/geonetwork/srv/api/records/8201070b-4b0b-4d54-8910-abcea5dce57f",
+      "revision": "2026-07-10",
+      "license": "CC BY 4.0"
+    },
+    {
+      "id": "pipelines",
+      "label": "Pipelines",
+      "category": "pipelines",
+      "mode": "vector_wfs",
+      "default_visible": false,
+      "source": "EMODnet Human Activities",
+      "metadata_url": "https://emodnet.ec.europa.eu/geonetwork/srv/api/records/aca3dd01-77ac-47fe-8291-6ca916daaa6d",
+      "revision": "2023-07-05",
+      "license": "CC BY 4.0"
+    },
+    {
+      "id": "power_cables",
+      "label": "Submarine power cables",
+      "category": "cables",
+      "infra_subtype": "power",
+      "mode": "vector_wfs",
+      "default_visible": true,
+      "source": "EMODnet Human Activities",
+      "metadata_url": "https://emodnet.ec.europa.eu/geonetwork/srv/api/records/41b339f8-b29c-4550-b787-3d68f08fdbcc",
+      "revision": "2023-06-28",
+      "license": "CC BY 4.0"
+    },
+    {
+      "id": "telecom_cables",
+      "label": "Telecommunication cables",
+      "category": "cables",
+      "infra_subtype": "telecommunication",
+      "mode": "vector_wfs",
+      "default_visible": false,
+      "source": "EMODnet Human Activities",
+      "metadata_url": "https://emodnet.ec.europa.eu/geonetwork/srv/api/records/39ebe289-410b-4a5d-88a4-51bfcde538de",
+      "revision": "2023-06-28",
+      "license": "CC BY 4.0"
+    },
+    {
+      "id": "shipping_density",
+      "label": "Shipping routes / density",
+      "category": "shipping",
+      "mode": "raster_wms",
+      "default_visible": true,
+      "source": "EMODnet Human Activities / EMSA",
+      "metadata_url": "https://emodnet.ec.europa.eu/geonetwork/srv/api/records/74eef9c6-13fe-4630-b935-f26871c8b661",
+      "license": "See EMODnet metadata"
+    },
+    {
+      "id": "power_plants",
+      "label": "Coastal power plants",
+      "category": "power_plants",
+      "mode": "osm_overpass_vector",
+      "default_visible": true,
+      "source": "OpenStreetMap",
+      "license": "ODbL",
+      "authoritative_alternative": {
+        "source": "HELCOM HOLAS 3 — Fossil fuel energy production",
+        "metadata_url": "https://metadata.helcom.fi/geonetwork/srv/api/records/b0c5ef19-56be-4b22-be7f-9f976cd2dfc2"
+      }
+    },
+    {
+      "id": "land_use",
+      "label": "Coastal land use",
+      "category": "land_use",
+      "mode": "large_external_dataset",
+      "default_visible": false,
+      "source": "Copernicus Land Monitoring Service — CORINE Land Cover",
+      "metadata_url": "https://land.copernicus.eu/en/products/corine-land-cover",
+      "license": "Copernicus data policy; verify product metadata"
+    }
+  ]
+}
