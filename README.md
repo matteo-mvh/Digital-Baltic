@@ -33,6 +33,19 @@ The repo is therefore both a website codebase and the machinery that prepares it
 
 The project is set up to host the website on GitHub Pages.
 
+## Live Site
+
+Open the deployed website directly here:
+
+- [Digital Baltic live site](https://matteo-mvh.github.io/Digital-Baltic/)
+
+From GitHub itself, there is not always a big repository-header website button for GitHub Pages. The reliable way to open it on Wednesday, August 19, 2026 is:
+
+1. Open the repository on GitHub.
+2. Go to `Settings`.
+3. Open `Pages` in the sidebar.
+4. Click `Visit site`.
+
 - `.github/workflows/deploy-site.yml` builds the static site and deploys `site/`
 - `.github/workflows/update-ocean-data.yml` refreshes Copernicus-backed ocean assets on a schedule and redeploys the website
 - `scripts/build_site.py` assembles the publishable site bundle
