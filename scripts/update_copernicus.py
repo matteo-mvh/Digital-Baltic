@@ -5,6 +5,7 @@ import json
 import os
 import shutil
 import sys
+import time
 from dataclasses import dataclass
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
@@ -113,14 +114,49 @@ def _load_json(path: Path) -> dict[str, Any]:
     return json.loads(path.read_text(encoding="utf-8"))
 
 
-def _fetch_json(url: str) -> dict[str, Any] | None:
-    try:
-        with urlrequest.urlopen(url) as response:
-            if response.status >= 400:
-                return None
-            return json.loads(response.read().decode("utf-8"))
-    except (json.JSONDecodeError, urlerror.HTTPError, urlerror.URLError):
-        return None
+def _site_json_url(site_url: str, relative_path: str) -> str:
+    normalized_site = site_url.rstrip("/")
+    normalized_path = relative_path.lstrip("./")
+    cache_bust = int(_runtime_now().timestamp())
+    return f"{normalized_site}/{normalized_path}?source=updater&t={cache_bust}"
+
+
+def _fetch_json(url: str, *, label: str, retries: int = 3, timeout_seconds: int = 20) -> dict[str, Any] | None:
+    request = urlrequest.Request(
+        url,
+        headers={
+            "User-Agent": "Digital-Baltic-Updater/1.0",
+            "Accept": "application/json",
+            "Cache-Control": "no-cache",
+            "Pragma": "no-cache",
+        },
+    )
+    for attempt in range(1, retries + 1):
+        try:
+            with urlrequest.urlopen(request, timeout=timeout_seconds) as response:
+                status = getattr(response, "status", 200)
+                body = response.read().decode("utf-8")
+                if status >= 400:
+                    _log(f"{label}: fetch attempt {attempt}/{retries} returned HTTP {status} for {url}")
+                else:
+                    payload = json.loads(body)
+                    summary = sorted(payload.keys())[:8] if isinstance(payload, dict) else []
+                    _log(f"{label}: fetch attempt {attempt}/{retries} succeeded from {url} with keys {summary}")
+                    return payload
+        except json.JSONDecodeError as exc:
+            _log(f"{label}: fetch attempt {attempt}/{retries} returned invalid JSON from {url}: {exc}")
+        except urlerror.HTTPError as exc:
+            _log(f"{label}: fetch attempt {attempt}/{retries} hit HTTP {exc.code} for {url}")
+        except urlerror.URLError as exc:
+            _log(f"{label}: fetch attempt {attempt}/{retries} hit URL error for {url}: {exc}")
+
+        if attempt < retries:
+            sleep_seconds = attempt * 2
+            _log(f"{label}: retrying in {sleep_seconds}s")
+            time.sleep(sleep_seconds)
+
+    _log(f"{label}: failed after {retries} attempts")
+    return None
 
 
 def _resolve_site_url(value: str | None) -> str | None:
@@ -155,21 +191,36 @@ def _previous_condition_state(
     local_manifest = condition_root / MANIFEST_NAME
     local_query_index = condition_root / QUERY_INDEX_NAME
     if local_manifest.exists() and local_query_index.exists():
+        _log(f"{condition_id}: using local processed state from {condition_root}")
         return _load_json(local_manifest), _load_json(local_query_index)
 
     if not site_url:
+        _log(f"{condition_id}: no site URL configured, so no previous remote state can be checked")
         return None, None
 
-    ocean_manifest = _fetch_json(f"{site_url}/data/ocean/manifest.json")
+    manifest_url = _site_json_url(site_url, "data/ocean/manifest.json")
+    _log(f"{condition_id}: probing previously deployed manifest at {manifest_url}")
+    ocean_manifest = _fetch_json(manifest_url, label=f"{condition_id}: ocean manifest")
     if not ocean_manifest:
+        _log(f"{condition_id}: previously deployed ocean manifest was not available")
         return None, None
     condition_entry = next((item for item in ocean_manifest.get("conditions", []) if item.get("id") == condition_id), None)
     metadata = condition_entry.get("metadata") if condition_entry else None
     if not metadata:
+        _log(f"{condition_id}: remote manifest does not include metadata for this condition")
         return None, None
-    query_index = _fetch_json(urlparse.urljoin(f"{site_url}/", metadata.get("query_index_url", "")))
+    query_index_relative_url = str(metadata.get("query_index_url", "")).lstrip("./")
+    query_index_url = _site_json_url(site_url, query_index_relative_url)
+    _log(f"{condition_id}: probing previously deployed query index at {query_index_url}")
+    query_index = _fetch_json(query_index_url, label=f"{condition_id}: query index")
     if not query_index:
+        _log(f"{condition_id}: previously deployed query index was not available")
         return None, None
+    available_times = metadata.get("availableTimes", [])
+    _log(
+        f"{condition_id}: recovered remote state with {len(available_times)} timestamps"
+        + (f" from {available_times[0]} to {available_times[-1]}" if available_times else "")
+    )
     return metadata, query_index
 
 
@@ -844,6 +895,11 @@ def _update_condition(
     access_info = _dataset_access_info(str(config["dataset_id"]), config, credentials)
     desired_times = _desired_times(config, access_info.available_times)
     existing_times = set(previous_metadata.get("availableTimes", [])) if previous_metadata else set()
+    _log(
+        f"{config['label']}: desired window has {len(desired_times)} timestamps"
+        + (f" from {desired_times[0]} to {desired_times[-1]}" if desired_times else "")
+    )
+    _log(f"{config['label']}: found {len(existing_times)} previously published timestamps")
 
     refresh_cutoff = _runtime_now() - timedelta(hours=int(config["refresh_hours"]))
     refresh_times = {
@@ -854,6 +910,11 @@ def _update_condition(
         or pd.Timestamp(timestamp_iso).tz_convert("UTC").to_pydatetime() >= refresh_cutoff
     }
     timestamps_to_remove = existing_times.difference(desired_times)
+    _log(
+        f"{config['label']}: refresh cutoff is {refresh_cutoff.isoformat().replace('+00:00', 'Z')}; "
+        f"carrying {len(set(desired_times).difference(refresh_times).intersection(existing_times))}, "
+        f"refreshing {len(refresh_times)}, removing {len(timestamps_to_remove)}"
+    )
 
     if not refresh_times and not timestamps_to_remove and existing_times == set(desired_times):
         _log(f"{config['label']}: No new Copernicus data.")

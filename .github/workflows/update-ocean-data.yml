@@ -43,6 +43,41 @@ jobs:
       - name: Install Python dependencies
         run: pip install -r requirements.txt
 
+      - name: Probe deployed ocean manifest
+        env:
+          DIGITAL_BALTIC_SITE_URL: ${{ env.DIGITAL_BALTIC_SITE_URL }}
+        run: |
+          python - <<'PY'
+          import json
+          import os
+          import urllib.error
+          import urllib.request
+
+          site_url = os.environ["DIGITAL_BALTIC_SITE_URL"].rstrip("/")
+          manifest_url = f"{site_url}/data/ocean/manifest.json?source=workflow-probe"
+          print(f"Probing deployed ocean manifest: {manifest_url}")
+          request = urllib.request.Request(
+              manifest_url,
+              headers={
+                  "User-Agent": "Digital-Baltic-Workflow-Probe/1.0",
+                  "Accept": "application/json",
+                  "Cache-Control": "no-cache",
+                  "Pragma": "no-cache",
+              },
+          )
+          try:
+              with urllib.request.urlopen(request, timeout=20) as response:
+                  payload = json.loads(response.read().decode("utf-8"))
+                  conditions = payload.get("conditions", [])
+                  available = {item.get("id"): bool(item.get("available")) for item in conditions}
+                  print(f"Manifest fetch succeeded with {len(conditions)} conditions")
+                  print(f"Available flags: {available}")
+          except urllib.error.HTTPError as exc:
+              print(f"Manifest probe failed with HTTP {exc.code}")
+          except urllib.error.URLError as exc:
+              print(f"Manifest probe failed with URL error: {exc}")
+          PY
+
       - name: Update Copernicus assets
         env:
           COPERNICUS_USERNAME: ${{ secrets.COPERNICUS_USERNAME }}
