@@ -1,0 +1,62 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Copenhagen Sea Live</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link
+      href="https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,600;9..144,700&family=Manrope:wght@400;500;700&display=swap"
+      rel="stylesheet"
+    />
+    <link
+      href="https://unpkg.com/maplibre-gl@5.6.0/dist/maplibre-gl.css"
+      rel="stylesheet"
+    />
+    <link rel="stylesheet" href="./styles.css" />
+  </head>
+  <body>
+    <div id="app-shell">
+      <div id="map"></div>
+
+      <header class="panel hero-panel">
+        <p class="eyebrow">Live Baltic Sea prototype</p>
+        <h1>Copenhagen Sea</h1>
+        <p id="subtitle">Loading the latest surface temperature field...</p>
+      </header>
+
+      <aside class="panel source-panel">
+        <p class="panel-label">Source</p>
+        <p id="source-summary">Copernicus Marine + OpenFreeMap</p>
+        <p id="source-detail">Free public prototype stack</p>
+      </aside>
+
+      <section class="panel click-panel" id="click-panel" hidden>
+        <p class="panel-label">At selected point</p>
+        <p class="metric" id="clicked-temperature">--.- degC</p>
+        <p id="clicked-coordinates">55.0000 N, 12.0000 E</p>
+      </section>
+
+      <section class="panel legend-panel" id="legend-panel" hidden>
+        <div class="legend-topline">
+          <p class="panel-label">Surface temperature</p>
+          <p id="legend-range"></p>
+        </div>
+        <div class="legend-bar"></div>
+        <div class="legend-scale">
+          <span id="legend-min"></span>
+          <span>degC</span>
+          <span id="legend-max"></span>
+        </div>
+      </section>
+
+      <section class="panel status-panel" id="status-panel">
+        <p id="status-message">Waiting for processed data...</p>
+      </section>
+    </div>
+
+    <script src="https://unpkg.com/maplibre-gl@5.6.0/dist/maplibre-gl.js"></script>
+    <script src="./app.js" type="module"></script>
+  </body>
+</html>
