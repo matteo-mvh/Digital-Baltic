@@ -266,6 +266,14 @@ def _validate_frame(
         raise ValueError(f"Downloaded timestamp {detected_time} does not match requested time {requested_time}.")
 
 
+def _subset_options(config: dict[str, Any]) -> dict[str, Any]:
+    options: dict[str, Any] = {}
+    vertical_subset = config.get("vertical_subset")
+    if isinstance(vertical_subset, dict):
+        options.update(vertical_subset)
+    return options
+
+
 def _download_timestamp(
     config: dict[str, Any],
     timestamp_iso: str,
@@ -292,6 +300,7 @@ def _download_timestamp(
         output_filename=raw_path.name,
         overwrite=True,
         disable_progress_bar=True,
+        **_subset_options(config),
     )
 
     if not raw_path.exists():

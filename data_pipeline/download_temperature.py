@@ -20,6 +20,7 @@ from data_pipeline.config import (
     DATASET_ID,
     DATASET_TYPE,
     LAYER_LABEL,
+    OCEAN_DATASETS,
     PRODUCT_ID,
     RAW_DATA_FILENAME,
     TEMPERATURE_VARIABLE,
@@ -31,6 +32,7 @@ from data_pipeline.process_temperature import process_temperature_dataset
 
 
 FORECAST_HORIZON = timedelta(days=2)
+TEMPERATURE_SUBSET_OPTIONS = dict(OCEAN_DATASETS["temperature"].get("vertical_subset", {}))
 
 
 def _copernicus_credentials() -> tuple[str, str]:
@@ -128,6 +130,7 @@ def download_temperature_window(run_processing: bool = True) -> None:
         output_filename=raw_path.name,
         overwrite=True,
         disable_progress_bar=True,
+        **TEMPERATURE_SUBSET_OPTIONS,
     )
 
     _write_download_metadata(start_time, end_time, selected_times)

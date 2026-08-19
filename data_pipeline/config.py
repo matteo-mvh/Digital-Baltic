@@ -69,6 +69,11 @@ OCEAN_DATASETS = {
         "palettes": ["blueRed", "greenRed", "grayscale", "yellowBlue"],
         "default_palette": "blueRed",
         "depth": "surface",
+        "vertical_subset": {
+            "minimum_depth": 0.0,
+            "maximum_depth": 0.0,
+            "coordinates_selection_method": "nearest",
+        },
         "plausible_range": [-5.0, 40.0],
         "bounds": [
             BBOX["minimum_longitude"],
@@ -96,6 +101,11 @@ OCEAN_DATASETS = {
         "palettes": ["default"],
         "default_palette": "yellowBlue",
         "depth": "surface",
+        "vertical_subset": {
+            "minimum_depth": 0.0,
+            "maximum_depth": 0.0,
+            "coordinates_selection_method": "nearest",
+        },
         "plausible_range": [0.0, 40.0],
         "bounds": [
             BBOX["minimum_longitude"],
@@ -123,6 +133,11 @@ OCEAN_DATASETS = {
         "palettes": ["default"],
         "default_palette": "greenRed",
         "depth": "surface",
+        "vertical_subset": {
+            "minimum_depth": 0.0,
+            "maximum_depth": 0.0,
+            "coordinates_selection_method": "nearest",
+        },
         "plausible_range": [0.0, 8.0],
         "bounds": [
             BBOX["minimum_longitude"],
@@ -150,6 +165,11 @@ OCEAN_DATASETS = {
         "palettes": ["default"],
         "default_palette": "greenRed",
         "depth": "surface",
+        "vertical_subset": {
+            "minimum_depth": 0.0,
+            "maximum_depth": 0.0,
+            "coordinates_selection_method": "nearest",
+        },
         "plausible_range": [0.0, 600.0],
         "bounds": [
             BBOX["minimum_longitude"],
