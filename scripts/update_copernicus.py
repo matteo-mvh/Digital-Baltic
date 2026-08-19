@@ -76,6 +76,12 @@ class CopernicusCredentials:
     password: str
 
 
+@dataclass(frozen=True)
+class DatasetAccessInfo:
+    available_times: pd.DatetimeIndex
+    subset_options: dict[str, Any]
+
+
 def _log(message: str) -> None:
     print(message, flush=True)
 
@@ -166,7 +172,20 @@ def _previous_condition_state(
     return metadata, query_index
 
 
-def _available_times(dataset_id: str, credentials: CopernicusCredentials) -> pd.DatetimeIndex:
+def _find_depth_coordinate_name(dataset: xr.Dataset) -> str | None:
+    for name in ("depth", "deptht", "lev", "z"):
+        if name in dataset.coords:
+            return name
+        if name in dataset.variables and getattr(dataset[name], "ndim", 0) == 1:
+            return name
+    return None
+
+
+def _dataset_access_info(
+    dataset_id: str,
+    config: dict[str, Any],
+    credentials: CopernicusCredentials,
+) -> DatasetAccessInfo:
     remote = copernicusmarine.open_dataset(
         dataset_id=dataset_id,
         username=credentials.username,
@@ -177,7 +196,24 @@ def _available_times(dataset_id: str, credentials: CopernicusCredentials) -> pd.
             raise RuntimeError(f"Copernicus returned no dataset for {dataset_id}. Check credentials and dataset access.")
         if "time" not in remote.coords:
             raise RuntimeError(f"Dataset {dataset_id} does not expose a time coordinate.")
-        return pd.to_datetime(remote["time"].values, utc=True)
+        available_times = pd.to_datetime(remote["time"].values, utc=True)
+        subset_options: dict[str, Any] = {}
+        depth_coordinate_name = _find_depth_coordinate_name(remote)
+        if config.get("depth") == "surface" and depth_coordinate_name:
+            depth_values = np.asarray(remote[depth_coordinate_name].values, dtype=np.float64)
+            finite_depths = depth_values[np.isfinite(depth_values)]
+            if finite_depths.size > 0:
+                surface_depth = float(finite_depths.min())
+                subset_options.update(
+                    {
+                        "minimum_depth": surface_depth,
+                        "maximum_depth": surface_depth,
+                    }
+                )
+        return DatasetAccessInfo(
+            available_times=available_times,
+            subset_options=subset_options,
+        )
     finally:
         close_method = getattr(remote, "close", None)
         if callable(close_method):
@@ -266,11 +302,13 @@ def _validate_frame(
         raise ValueError(f"Downloaded timestamp {detected_time} does not match requested time {requested_time}.")
 
 
-def _subset_options(config: dict[str, Any]) -> dict[str, Any]:
+def _subset_options(config: dict[str, Any], access_info: DatasetAccessInfo | None = None) -> dict[str, Any]:
     options: dict[str, Any] = {}
+    if access_info:
+        options.update(access_info.subset_options)
     vertical_subset = config.get("vertical_subset")
     if isinstance(vertical_subset, dict):
-        options.update(vertical_subset)
+        options.update({key: value for key, value in vertical_subset.items() if key not in options})
     return options
 
 
@@ -279,6 +317,7 @@ def _download_timestamp(
     timestamp_iso: str,
     download_root: Path,
     credentials: CopernicusCredentials,
+    access_info: DatasetAccessInfo,
 ) -> FrameBundle:
     frame_key = _frame_key(timestamp_iso)
     condition_root = download_root / config["id"]
@@ -300,7 +339,7 @@ def _download_timestamp(
         output_filename=raw_path.name,
         overwrite=True,
         disable_progress_bar=True,
-        **_subset_options(config),
+        **_subset_options(config, access_info),
     )
 
     if not raw_path.exists():
@@ -725,8 +764,8 @@ def _update_condition(
     credentials: CopernicusCredentials,
 ) -> dict[str, Any] | None:
     previous_metadata, previous_query_index = _previous_condition_state(config["id"], site_url)
-    available_times = _available_times(str(config["dataset_id"]), credentials)
-    desired_times = _desired_times(config, available_times)
+    access_info = _dataset_access_info(str(config["dataset_id"]), config, credentials)
+    desired_times = _desired_times(config, access_info.available_times)
     existing_times = set(previous_metadata.get("availableTimes", [])) if previous_metadata else set()
 
     refresh_cutoff = _runtime_now() - timedelta(hours=int(config["refresh_hours"]))
@@ -756,7 +795,7 @@ def _update_condition(
     for timestamp_iso in desired_times:
         if timestamp_iso not in refresh_times:
             continue
-        frame = _download_timestamp(config, timestamp_iso, download_root, credentials)
+        frame = _download_timestamp(config, timestamp_iso, download_root, credentials, access_info)
         downloaded_frames.append(frame)
         _log(f"{config['label']}: processed {frame.time_utc}")
 

@@ -64,6 +64,31 @@ def _available_times(username: str, password: str) -> pd.DatetimeIndex:
             close_method()
 
 
+def _surface_subset_options(username: str, password: str) -> dict[str, float]:
+    remote = copernicusmarine.open_dataset(
+        dataset_id=DATASET_ID,
+        username=username,
+        password=password,
+    )
+    try:
+        for name in ("depth", "deptht", "lev", "z"):
+            if name in remote.coords or (name in remote.variables and getattr(remote[name], "ndim", 0) == 1):
+                depth_values = pd.to_numeric(remote[name].values.reshape(-1), errors="coerce")
+                finite_depths = depth_values[pd.notna(depth_values)]
+                if len(finite_depths) > 0:
+                    surface_depth = float(finite_depths.min())
+                    return {
+                        "minimum_depth": surface_depth,
+                        "maximum_depth": surface_depth,
+                    }
+                break
+        return {}
+    finally:
+        close_method = getattr(remote, "close", None)
+        if callable(close_method):
+            close_method()
+
+
 def _select_time_window(available_times: pd.DatetimeIndex) -> tuple[datetime, datetime, list[str]]:
     now_utc = datetime.now(timezone.utc)
     current_or_future = available_times[available_times >= now_utc]
@@ -107,6 +132,7 @@ def download_temperature_window(run_processing: bool = True) -> None:
 
     username, password = _copernicus_credentials()
     available_times = _available_times(username, password)
+    surface_subset_options = _surface_subset_options(username, password)
     start_time, end_time, selected_times = _select_time_window(available_times)
     raw_path = raw_dataset_path()
 
@@ -130,7 +156,7 @@ def download_temperature_window(run_processing: bool = True) -> None:
         output_filename=raw_path.name,
         overwrite=True,
         disable_progress_bar=True,
-        **TEMPERATURE_SUBSET_OPTIONS,
+        **surface_subset_options,
     )
 
     _write_download_metadata(start_time, end_time, selected_times)
