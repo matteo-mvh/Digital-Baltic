@@ -228,7 +228,27 @@ def _desired_times(config: dict[str, Any], available_times: pd.DatetimeIndex) ->
     if len(selected) == 0:
         nearest_index = int((available_times - now_utc).to_series().abs().argmin())
         selected = pd.DatetimeIndex([available_times[nearest_index]])
+    selected = _apply_download_interval(config, selected)
     return [_normalize_timestamp(value) for value in selected]
+
+
+def _apply_download_interval(config: dict[str, Any], selected: pd.DatetimeIndex) -> pd.DatetimeIndex:
+    interval_minutes = int(config.get("download_interval_minutes", 60))
+    if interval_minutes <= 0 or len(selected) <= 1:
+        return selected
+
+    spacing = selected.to_series().diff().dropna()
+    if not spacing.empty and spacing.median() >= pd.Timedelta(minutes=interval_minutes):
+        return selected
+
+    bucketed: dict[pd.Timestamp, pd.Timestamp] = {}
+    for timestamp in selected:
+        bucket = timestamp.floor(f"{interval_minutes}min")
+        current = bucketed.get(bucket)
+        if current is None or abs(timestamp - bucket) < abs(current - bucket):
+            bucketed[bucket] = timestamp
+
+    return pd.DatetimeIndex(sorted(bucketed.values()))
 
 
 def _surface_dataarray(dataset: xr.Dataset, variable_name: str) -> xr.DataArray:

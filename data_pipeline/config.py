@@ -27,6 +27,7 @@ OPERATIONAL_FORECAST_DAYS = 3
 FORECAST_REFRESH_HOURS = 18
 MAX_TEMPORARY_DISK_GB = 5
 MAX_RUNNER_RAM_GB = 8
+DEFAULT_DOWNLOAD_INTERVAL_MINUTES = 60
 
 BALTIC_REGION = {
     "name": "Baltic Sea",
@@ -84,6 +85,7 @@ OCEAN_DATASETS = {
         "history_days": OPERATIONAL_HISTORY_DAYS,
         "forecast_days": OPERATIONAL_FORECAST_DAYS,
         "refresh_hours": FORECAST_REFRESH_HOURS,
+        "download_interval_minutes": DEFAULT_DOWNLOAD_INTERVAL_MINUTES,
     },
     "salinity": {
         "id": "salinity",
@@ -116,6 +118,7 @@ OCEAN_DATASETS = {
         "history_days": OPERATIONAL_HISTORY_DAYS,
         "forecast_days": OPERATIONAL_FORECAST_DAYS,
         "refresh_hours": FORECAST_REFRESH_HOURS,
+        "download_interval_minutes": DEFAULT_DOWNLOAD_INTERVAL_MINUTES,
     },
     "currents": {
         "id": "currents",
@@ -148,6 +151,7 @@ OCEAN_DATASETS = {
         "history_days": 1,
         "forecast_days": 2,
         "refresh_hours": 12,
+        "download_interval_minutes": DEFAULT_DOWNLOAD_INTERVAL_MINUTES,
     },
     "oxygen": {
         "id": "oxygen",
@@ -180,6 +184,7 @@ OCEAN_DATASETS = {
         "history_days": 3,
         "forecast_days": 3,
         "refresh_hours": 24,
+        "download_interval_minutes": DEFAULT_DOWNLOAD_INTERVAL_MINUTES,
     },
     "waves": {
         "id": "waves",
@@ -207,6 +212,7 @@ OCEAN_DATASETS = {
         "history_days": OPERATIONAL_HISTORY_DAYS,
         "forecast_days": OPERATIONAL_FORECAST_DAYS,
         "refresh_hours": FORECAST_REFRESH_HOURS,
+        "download_interval_minutes": DEFAULT_DOWNLOAD_INTERVAL_MINUTES,
     },
     "seaLevel": {
         "id": "seaLevel",
@@ -234,6 +240,7 @@ OCEAN_DATASETS = {
         "history_days": OPERATIONAL_HISTORY_DAYS,
         "forecast_days": OPERATIONAL_FORECAST_DAYS,
         "refresh_hours": FORECAST_REFRESH_HOURS,
+        "download_interval_minutes": DEFAULT_DOWNLOAD_INTERVAL_MINUTES,
     }
 }
 
