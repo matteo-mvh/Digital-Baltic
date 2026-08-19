@@ -71,9 +71,14 @@ def _surface_stack(dataset: xr.Dataset) -> xr.DataArray:
     return data.squeeze(drop=False)
 
 
+def _time_coord_values(value: Any) -> list[pd.Timestamp]:
+    normalized = pd.to_datetime(np.atleast_1d(value), utc=True)
+    return [pd.Timestamp(item).tz_convert("UTC") for item in normalized]
+
+
 def _time_values_from_surface(surface: xr.DataArray) -> list[str]:
     if "time" in surface.coords:
-        return [pd.Timestamp(value).tz_convert("UTC").isoformat() for value in pd.to_datetime(surface["time"].values, utc=True)]
+        return [value.isoformat() for value in _time_coord_values(surface["time"].values)]
     return [datetime.now(timezone.utc).isoformat()]
 
 

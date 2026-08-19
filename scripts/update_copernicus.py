@@ -88,6 +88,11 @@ def _normalize_timestamp(value: Any) -> str:
     return pd.Timestamp(value).tz_convert("UTC").isoformat().replace("+00:00", "Z")
 
 
+def _time_coord_values(value: Any) -> list[pd.Timestamp]:
+    normalized = pd.to_datetime(np.atleast_1d(value), utc=True)
+    return [pd.Timestamp(item).tz_convert("UTC") for item in normalized]
+
+
 def _frame_key(timestamp_iso: str) -> str:
     return (
         timestamp_iso.replace(":", "-")
@@ -207,7 +212,7 @@ def _extract_values(dataset: xr.Dataset, config: dict[str, Any]) -> tuple[np.nda
     if processor == "temperature":
         data = _surface_stack(dataset)
         values, original_units, converted_from_kelvin = _to_celsius(data)
-        timestamp_iso = _normalize_timestamp(pd.to_datetime(data["time"].values, utc=True)[0])
+        timestamp_iso = _normalize_timestamp(_time_coord_values(data["time"].values)[0])
         return values[0] if values.ndim == 3 else values, original_units, converted_from_kelvin, timestamp_iso
 
     if processor == "currents":
@@ -220,14 +225,14 @@ def _extract_values(dataset: xr.Dataset, config: dict[str, Any]) -> tuple[np.nda
         if v_values.ndim == 3:
             v_values = v_values[0]
         values = np.sqrt(np.square(u_values) + np.square(v_values))
-        timestamp_iso = _normalize_timestamp(pd.to_datetime(u_data["time"].values, utc=True)[0])
+        timestamp_iso = _normalize_timestamp(_time_coord_values(u_data["time"].values)[0])
         return values, str(u_data.attrs.get("units", config["units"])) or config["units"], False, timestamp_iso
 
     data = _surface_dataarray(dataset, str(config["primary_variable"]))
     values = data.values.astype(np.float32)
     if values.ndim == 3:
         values = values[0]
-    timestamp_iso = _normalize_timestamp(pd.to_datetime(data["time"].values, utc=True)[0])
+    timestamp_iso = _normalize_timestamp(_time_coord_values(data["time"].values)[0])
     return values, str(data.attrs.get("units", config["units"])) or config["units"], False, timestamp_iso
 
 
