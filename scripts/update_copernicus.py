@@ -713,6 +713,7 @@ def _build_condition_outputs(
             "average_tile_bytes": {},
         }
 
+    values_key = str(config["query_value_key"])
     frame_payloads: list[dict[str, Any]] = []
     query_index_frames: list[dict[str, Any]] = []
     for frame_index, frame in enumerate(frames):
