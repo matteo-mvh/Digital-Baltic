@@ -22,8 +22,8 @@ COPERNICUS_PASSWORD_ENV_VARS = (
 )
 SITE_URL_ENV_VAR = "DIGITAL_BALTIC_SITE_URL"
 
-OPERATIONAL_HISTORY_DAYS = 2
-OPERATIONAL_FORECAST_DAYS = 3
+OPERATIONAL_HISTORY_DAYS = 1
+OPERATIONAL_FORECAST_DAYS = 2
 FORECAST_REFRESH_HOURS = 18
 MAX_TEMPORARY_DISK_GB = 5
 MAX_RUNNER_RAM_GB = 8
@@ -181,8 +181,8 @@ OCEAN_DATASETS = {
             BBOX["maximum_longitude"],
             BBOX["maximum_latitude"],
         ],
-        "history_days": 3,
-        "forecast_days": 3,
+        "history_days": OPERATIONAL_HISTORY_DAYS,
+        "forecast_days": OPERATIONAL_FORECAST_DAYS,
         "refresh_hours": 24,
         "download_interval_minutes": DEFAULT_DOWNLOAD_INTERVAL_MINUTES,
     },
