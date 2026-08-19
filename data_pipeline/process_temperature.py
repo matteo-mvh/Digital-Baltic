@@ -68,7 +68,7 @@ def _surface_stack(dataset: xr.Dataset) -> xr.DataArray:
     if "time" not in data.dims:
         data = data.expand_dims(time=[pd.Timestamp(datetime.now(timezone.utc))])
 
-    return data.squeeze(drop=True)
+    return data.squeeze(drop=False)
 
 
 def _time_values_from_surface(surface: xr.DataArray) -> list[str]:

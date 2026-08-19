@@ -198,7 +198,7 @@ def _surface_dataarray(dataset: xr.Dataset, variable_name: str) -> xr.DataArray:
             break
     if "time" not in data.dims:
         data = data.expand_dims(time=[pd.Timestamp(_runtime_now())])
-    return data.squeeze(drop=True)
+    return data.squeeze(drop=False)
 
 
 def _extract_values(dataset: xr.Dataset, config: dict[str, Any]) -> tuple[np.ndarray, str, bool, str]:
