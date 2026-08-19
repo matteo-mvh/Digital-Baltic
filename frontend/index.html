@@ -123,19 +123,19 @@
             <p class="section-kicker" data-i18n="sections.layersKicker">What can you explore?</p>
             <h2 data-i18n="sections.layersTitle">A public-facing platform for the whole Baltic Sea.</h2>
             <p class="supporting-copy" data-i18n="sections.layersBody">
-              Some layers work already. Others are intentionally visible as part of the longer-term
-              vision, but remain disabled until real data and interaction design are ready.
+              The live map now includes multiple Baltic-wide ocean-condition overlays, while the
+              remaining roadmap layers stay visible as the next expansion path.
             </p>
             <div class="roadmap-grid">
               <article class="roadmap-card">
                 <p class="roadmap-heading" data-i18n="roadmap.ocean">Ocean conditions</p>
                 <ul class="roadmap-list">
                   <li class="is-live" data-i18n="layers.temperature">Surface temperature</li>
-                  <li data-i18n="layers.currents">Currents</li>
-                  <li data-i18n="layers.salinity">Salinity</li>
-                  <li data-i18n="layers.oxygen">Oxygen</li>
-                  <li data-i18n="layers.waves">Waves</li>
-                  <li data-i18n="layers.seaLevel">Sea level</li>
+                  <li class="is-live" data-i18n="layers.currents">Currents</li>
+                  <li class="is-live" data-i18n="layers.salinity">Salinity</li>
+                  <li class="is-live" data-i18n="layers.oxygen">Oxygen</li>
+                  <li class="is-live" data-i18n="layers.waves">Waves</li>
+                  <li class="is-live" data-i18n="layers.seaLevel">Sea level</li>
                 </ul>
               </article>
               <article class="roadmap-card">
@@ -217,7 +217,7 @@
               <p class="section-kicker" data-i18n="preview.kicker">Live preview</p>
               <h2 data-i18n="preview.title">Whole Baltic Sea</h2>
               <p data-i18n="preview.body">
-                Start with a Baltic-wide temperature view, then expand into the full live-map experience.
+                Switch between live Baltic-wide temperature, currents, salinity, oxygen, waves and sea-level views.
               </p>
               <button id="preview-enter-map" class="primary-button" type="button" data-i18n="preview.cta">
                 Explore the live map
@@ -249,11 +249,11 @@
                 <div class="layer-group">
                   <p class="layer-group-title" data-i18n="roadmap.ocean">Ocean conditions</p>
                   <button id="temperature-toggle" class="layer-row is-live" type="button">Surface temperature</button>
-                  <button id="currents-toggle" class="layer-row" type="button">Currents</button>
-                  <button id="salinity-toggle" class="layer-row" type="button">Salinity</button>
-                  <button id="oxygen-toggle" class="layer-row" type="button">Oxygen</button>
-                  <button id="waves-toggle" class="layer-row" type="button">Waves</button>
-                  <button id="sea-level-toggle" class="layer-row" type="button">Sea level</button>
+                  <button id="currents-toggle" class="layer-row is-live" type="button">Currents</button>
+                  <button id="salinity-toggle" class="layer-row is-live" type="button">Salinity</button>
+                  <button id="oxygen-toggle" class="layer-row is-live" type="button">Oxygen</button>
+                  <button id="waves-toggle" class="layer-row is-live" type="button">Waves</button>
+                  <button id="sea-level-toggle" class="layer-row is-live" type="button">Sea level</button>
                 </div>
 
                 <div class="layer-group">

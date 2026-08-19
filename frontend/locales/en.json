@@ -23,7 +23,7 @@
   "preview": {
     "kicker": "Live preview",
     "title": "Whole Baltic Sea",
-    "body": "Start with a Baltic-wide temperature view, then expand into the full live-map experience.",
+    "body": "Switch between live Baltic-wide temperature, currents, salinity, oxygen, waves and sea-level views.",
     "cta": "Explore the live map"
   },
   "sections": {
@@ -31,7 +31,7 @@
     "whatTitle": "Different layers come from different kinds of knowledge.",
     "layersKicker": "What can you explore?",
     "layersTitle": "A public-facing platform for the whole Baltic Sea.",
-    "layersBody": "Some layers work already. Others are intentionally visible as part of the longer-term vision, but remain disabled until real data and interaction design are ready.",
+    "layersBody": "The live map now includes multiple Baltic-wide ocean-condition overlays, while the remaining roadmap layers stay visible as the next expansion path.",
     "accessibilityKicker": "Accessibility",
     "accessibilityTitle": "Choose a temperature colour scale that is easier to read.",
     "accessibilityBody": "The map keeps the same data while the colour palette changes. This makes it easier to compare the sea in different viewing conditions, including colour-vision differences.",
