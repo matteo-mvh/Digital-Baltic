@@ -131,11 +131,33 @@ def _interpolate_palette(normalized: np.ndarray, palette_name: str) -> np.ndarra
     return output.astype(np.uint8)
 
 
+def _shrink_water_mask(valid_mask: np.ndarray, buffer_cells: int = 2) -> np.ndarray:
+    if buffer_cells <= 0:
+        return valid_mask
+
+    shrunken = valid_mask.copy()
+    for _ in range(buffer_cells):
+        padded = np.pad(shrunken, 1, mode="constant", constant_values=False)
+        north = padded[:-2, 1:-1]
+        south = padded[2:, 1:-1]
+        west = padded[1:-1, :-2]
+        east = padded[1:-1, 2:]
+        northwest = padded[:-2, :-2]
+        northeast = padded[:-2, 2:]
+        southwest = padded[2:, :-2]
+        southeast = padded[2:, 2:]
+        fully_surrounded = north & south & west & east & northwest & northeast & southwest & southeast
+        shrunken &= fully_surrounded
+    return shrunken
+
+
 def _render_overlay(values_celsius: np.ndarray, display_min: float, display_max: float, palette_name: str) -> Image.Image:
     normalized = (values_celsius - display_min) / (display_max - display_min)
     normalized = np.clip(normalized, 0.0, 1.0)
     rgb = _interpolate_palette(normalized, palette_name)
-    alpha = np.where(np.isfinite(values_celsius), 184, 0).astype(np.uint8)
+    valid_mask = np.isfinite(values_celsius)
+    coastline_safe_water = _shrink_water_mask(valid_mask, buffer_cells=2)
+    alpha = np.where(coastline_safe_water, 184, 0).astype(np.uint8)
     rgb[~np.isfinite(values_celsius)] = 0
     rgba = np.dstack((rgb, alpha))
     rgba = np.flipud(rgba)
