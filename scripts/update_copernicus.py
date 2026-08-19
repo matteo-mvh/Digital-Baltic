@@ -54,6 +54,7 @@ from data_pipeline.process_temperature import (
 
 QUERY_INDEX_NAME = "query_index.json"
 MANIFEST_NAME = "manifest.json"
+FRAME_DATA_DIRECTORY_NAME = "frames"
 
 
 @dataclass
@@ -112,6 +113,10 @@ def _frame_key(timestamp_iso: str) -> str:
 
 def _load_json(path: Path) -> dict[str, Any]:
     return json.loads(path.read_text(encoding="utf-8"))
+
+
+def _load_frame_json(path: Path) -> dict[str, Any]:
+    return _load_json(path)
 
 
 def _site_json_url(site_url: str, relative_path: str) -> str:
@@ -183,45 +188,76 @@ def _ensure_copernicus_environment(credentials: CopernicusCredentials) -> None:
     os.environ.setdefault("COPERNICUSMARINE_SERVICE_PASSWORD", credentials.password)
 
 
+def _load_remote_frame_payloads(
+    site_url: str,
+    condition_id: str,
+    query_index: dict[str, Any],
+) -> dict[str, dict[str, Any]]:
+    frame_entries = query_index.get("frames", [])
+    payloads: dict[str, dict[str, Any]] = {}
+    for frame_entry in frame_entries:
+        time_utc = frame_entry.get("time_utc")
+        relative_url = str(frame_entry.get("data_url", "")).lstrip("./")
+        if not time_utc or not relative_url:
+            continue
+        frame_url = _site_json_url(site_url, relative_url)
+        payload = _fetch_json(frame_url, label=f"{condition_id}: frame {time_utc}")
+        if payload:
+            payloads[str(time_utc)] = payload
+    return payloads
+
+
 def _previous_condition_state(
     condition_id: str,
     site_url: str | None,
-) -> tuple[dict[str, Any] | None, dict[str, Any] | None]:
+) -> tuple[dict[str, Any] | None, dict[str, Any] | None, dict[str, dict[str, Any]] | None]:
     condition_root = SITE_OCEAN_ROOT / condition_id
     local_manifest = condition_root / MANIFEST_NAME
     local_query_index = condition_root / QUERY_INDEX_NAME
     if local_manifest.exists() and local_query_index.exists():
         _log(f"{condition_id}: using local processed state from {condition_root}")
-        return _load_json(local_manifest), _load_json(local_query_index)
+        query_index = _load_json(local_query_index)
+        frame_payloads: dict[str, dict[str, Any]] = {}
+        frame_root = condition_root / FRAME_DATA_DIRECTORY_NAME
+        if frame_root.exists():
+            for frame_file in sorted(frame_root.glob("*.json")):
+                payload = _load_frame_json(frame_file)
+                time_utc = payload.get("time_utc")
+                if time_utc:
+                    frame_payloads[str(time_utc)] = payload
+        return _load_json(local_manifest), query_index, frame_payloads or None
 
     if not site_url:
         _log(f"{condition_id}: no site URL configured, so no previous remote state can be checked")
-        return None, None
+        return None, None, None
 
     manifest_url = _site_json_url(site_url, "data/ocean/manifest.json")
     _log(f"{condition_id}: probing previously deployed manifest at {manifest_url}")
     ocean_manifest = _fetch_json(manifest_url, label=f"{condition_id}: ocean manifest")
     if not ocean_manifest:
         _log(f"{condition_id}: previously deployed ocean manifest was not available")
-        return None, None
+        return None, None, None
     condition_entry = next((item for item in ocean_manifest.get("conditions", []) if item.get("id") == condition_id), None)
     metadata = condition_entry.get("metadata") if condition_entry else None
     if not metadata:
         _log(f"{condition_id}: remote manifest does not include metadata for this condition")
-        return None, None
+        return None, None, None
     query_index_relative_url = str(metadata.get("query_index_url", "")).lstrip("./")
     query_index_url = _site_json_url(site_url, query_index_relative_url)
     _log(f"{condition_id}: probing previously deployed query index at {query_index_url}")
     query_index = _fetch_json(query_index_url, label=f"{condition_id}: query index")
     if not query_index:
         _log(f"{condition_id}: previously deployed query index was not available")
-        return None, None
+        return None, None, None
+    frame_payloads = None
+    if "frames" in query_index and "times_utc" in query_index and metadata.get("frames"):
+        frame_payloads = _load_remote_frame_payloads(site_url, condition_id, query_index)
     available_times = metadata.get("availableTimes", [])
     _log(
         f"{condition_id}: recovered remote state with {len(available_times)} timestamps"
         + (f" from {available_times[0]} to {available_times[-1]}" if available_times else "")
     )
-    return metadata, query_index
+    return metadata, query_index, frame_payloads
 
 
 def _find_depth_coordinate_name(dataset: xr.Dataset) -> str | None:
@@ -492,6 +528,7 @@ def _restore_frames(
     refresh_times: set[str],
     previous_metadata: dict[str, Any] | None,
     previous_query_index: dict[str, Any] | None,
+    previous_frame_payloads: dict[str, dict[str, Any]] | None,
 ) -> list[FrameBundle]:
     if not previous_metadata or not previous_query_index:
         return []
@@ -499,19 +536,35 @@ def _restore_frames(
     latitudes = np.array(previous_query_index["latitudes"], dtype=np.float64)
     longitudes = np.array(previous_query_index["longitudes"], dtype=np.float64)
     values_key = previous_metadata.get("query_value_key", config["query_value_key"])
-    values_by_time = {
-        timestamp_iso: previous_query_index[values_key][index]
-        for index, timestamp_iso in enumerate(previous_query_index.get("times_utc", []))
-    }
-    component_payload = previous_query_index.get("components", {})
-    components_by_time = {
-        timestamp_iso: {
-            name: np.array(series[index], dtype=np.float32)
-            for name, series in component_payload.items()
-            if index < len(series)
+    if values_key in previous_query_index:
+        values_by_time = {
+            timestamp_iso: previous_query_index[values_key][index]
+            for index, timestamp_iso in enumerate(previous_query_index.get("times_utc", []))
         }
-        for index, timestamp_iso in enumerate(previous_query_index.get("times_utc", []))
-    }
+        component_payload = previous_query_index.get("components", {})
+        components_by_time = {
+            timestamp_iso: {
+                name: np.array(series[index], dtype=np.float32)
+                for name, series in component_payload.items()
+                if index < len(series)
+            }
+            for index, timestamp_iso in enumerate(previous_query_index.get("times_utc", []))
+        }
+    else:
+        frame_payloads = previous_frame_payloads or {}
+        values_by_time = {
+            timestamp_iso: frame_payloads[timestamp_iso].get(values_key)
+            for timestamp_iso in previous_query_index.get("times_utc", [])
+            if timestamp_iso in frame_payloads
+        }
+        components_by_time = {
+            timestamp_iso: {
+                name: np.array(values, dtype=np.float32)
+                for name, values in frame_payloads[timestamp_iso].get("components", {}).items()
+            }
+            for timestamp_iso in previous_query_index.get("times_utc", [])
+            if timestamp_iso in frame_payloads
+        }
     frames_by_time = {frame["time_utc"]: frame for frame in previous_metadata.get("frames", [])}
 
     restored: list[FrameBundle] = []
@@ -600,6 +653,8 @@ def _build_condition_outputs(
         shutil.rmtree(condition_root)
     condition_root.mkdir(parents=True, exist_ok=True)
     (condition_root / "tiles").mkdir(parents=True, exist_ok=True)
+    frame_root = condition_root / FRAME_DATA_DIRECTORY_NAME
+    frame_root.mkdir(parents=True, exist_ok=True)
 
     display_min, display_max = _nice_display_range(values_stack)
     valid_mask = np.any(np.isfinite(values_stack), axis=0)
@@ -659,6 +714,7 @@ def _build_condition_outputs(
         }
 
     frame_payloads: list[dict[str, Any]] = []
+    query_index_frames: list[dict[str, Any]] = []
     for frame_index, frame in enumerate(frames):
         payload = {
             "index": frame_index,
@@ -678,6 +734,31 @@ def _build_condition_outputs(
             payload["min_value"] = frame.min_value
             payload["max_value"] = frame.max_value
         frame_payloads.append(payload)
+        query_index_frames.append(
+            {
+                "index": frame_index,
+                "key": frame.key,
+                "time_utc": frame.time_utc,
+                "data_url": f"./data/ocean/{config['id']}/{FRAME_DATA_DIRECTORY_NAME}/{frame.key}.json",
+            }
+        )
+
+        frame_data_payload = {
+            "key": frame.key,
+            "time_utc": frame.time_utc,
+            values_key: [
+                [None if not np.isfinite(value) else round(float(value), 4) for value in row]
+                for row in frame.values.tolist()
+            ],
+            "components": {
+                component_name: [
+                    [None if not np.isfinite(value) else round(float(value), 4) for value in row]
+                    for row in component_values.tolist()
+                ]
+                for component_name, component_values in frame.components.items()
+            },
+        }
+        (frame_root / f"{frame.key}.json").write_text(json.dumps(frame_data_payload), encoding="utf-8")
 
         for level in TEMPERATURE_TILE_LEVELS:
             resampled_values, _level_lats, _level_lons = _resample_frame(frame.values, latitudes, longitudes, level)
@@ -711,23 +792,8 @@ def _build_condition_outputs(
         "longitudes": [round(float(value), 6) for value in longitudes.tolist()],
         "times_utc": [frame.time_utc for frame in frames],
         "frame_keys": [frame.key for frame in frames],
-        config["query_value_key"]: [
-            [
-                [None if not np.isfinite(value) else round(float(value), 4) for value in row]
-                for row in frame.values.tolist()
-            ]
-            for frame in frames
-        ],
-        "components": {
-            component_name: [
-                [
-                    [None if not np.isfinite(value) else round(float(value), 4) for value in row]
-                    for row in frame.components.get(component_name, np.full(frame.values.shape, np.nan, dtype=np.float32)).tolist()
-                ]
-                for frame in frames
-            ]
-            for component_name in component_names
-        },
+        "frames": query_index_frames,
+        "component_names": component_names,
     }
     (condition_root / QUERY_INDEX_NAME).write_text(json.dumps(query_index_payload), encoding="utf-8")
 
@@ -891,7 +957,7 @@ def _update_condition(
     force_full_refresh: bool,
     credentials: CopernicusCredentials,
 ) -> dict[str, Any] | None:
-    previous_metadata, previous_query_index = _previous_condition_state(config["id"], site_url)
+    previous_metadata, previous_query_index, previous_frame_payloads = _previous_condition_state(config["id"], site_url)
     access_info = _dataset_access_info(str(config["dataset_id"]), config, credentials)
     desired_times = _desired_times(config, access_info.available_times)
     existing_times = set(previous_metadata.get("availableTimes", [])) if previous_metadata else set()
@@ -926,6 +992,7 @@ def _update_condition(
         refresh_times=refresh_times,
         previous_metadata=previous_metadata,
         previous_query_index=previous_query_index,
+        previous_frame_payloads=previous_frame_payloads,
     )
 
     downloaded_frames: list[FrameBundle] = []
@@ -971,7 +1038,7 @@ def update_all_conditions(site_url: str | None, force_full_refresh: bool = False
                 available_metadata[condition_id] = metadata
         except Exception as exc:
             _log(f"{config['label']}: update failed, keeping previous valid data if available. Reason: {exc}")
-            previous_metadata, previous_query_index = _previous_condition_state(condition_id, site_url)
+            previous_metadata, previous_query_index, previous_frame_payloads = _previous_condition_state(condition_id, site_url)
             if previous_metadata and previous_query_index:
                 preserved_frames = _restore_frames(
                     config=config,
@@ -979,6 +1046,7 @@ def update_all_conditions(site_url: str | None, force_full_refresh: bool = False
                     refresh_times=set(),
                     previous_metadata=previous_metadata,
                     previous_query_index=previous_query_index,
+                    previous_frame_payloads=previous_frame_payloads,
                 )
                 if preserved_frames:
                     available_metadata[condition_id] = _build_condition_outputs(

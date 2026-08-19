@@ -380,6 +380,7 @@ const state = {
   oceanManifest: null,
   oceanConditions: {},
   oceanQueryIndices: {},
+  oceanFrameData: {},
   metadata: null,
   map: null,
   maplibregl: null,
@@ -766,8 +767,8 @@ function numericGridValue(grid, rowIndex, columnIndex) {
   return Number.isFinite(value) ? value : null;
 }
 
-function componentFrame(queryIndex, componentName, frameIndex) {
-  return queryIndex?.components?.[componentName]?.[frameIndex] ?? null;
+function componentFrame(frameData, componentName) {
+  return frameData?.components?.[componentName] ?? null;
 }
 
 function rgbaString(color, alpha = 1) {
@@ -990,11 +991,11 @@ function updateOceanLayerStyles() {
   state.map.setPaintProperty("ocean-vector-head", "line-opacity", headOpacity);
 }
 
-function buildOceanRenderCollections(queryIndex, metadata, condition, frameIndex, zoom) {
+function buildOceanRenderCollections(queryIndex, frameData, metadata, condition, frameIndex, zoom) {
   const latitudes = queryIndex?.latitudes ?? [];
   const longitudes = queryIndex?.longitudes ?? [];
   const gridKey = metadata.query_value_key || condition.value_key || "values_celsius";
-  const frameGrid = queryIndex?.[gridKey]?.[frameIndex] ?? null;
+  const frameGrid = frameData?.[gridKey] ?? queryIndex?.[gridKey]?.[frameIndex] ?? null;
   if (!Array.isArray(frameGrid) || latitudes.length === 0 || longitudes.length === 0) {
     return {
       scalar: emptyFeatureCollection(),
@@ -1187,12 +1188,12 @@ function buildOceanRenderCollections(queryIndex, metadata, condition, frameIndex
 
   const eastwardGrid =
     condition.id === "currents"
-      ? componentFrame(queryIndex, "eastward_mps", frameIndex)
-      : componentFrame(queryIndex, "eastward_unit", frameIndex);
+      ? componentFrame(frameData, "eastward_mps")
+      : componentFrame(frameData, "eastward_unit");
   const northwardGrid =
     condition.id === "currents"
-      ? componentFrame(queryIndex, "northward_mps", frameIndex)
-      : componentFrame(queryIndex, "northward_unit", frameIndex);
+      ? componentFrame(frameData, "northward_mps")
+      : componentFrame(frameData, "northward_unit");
 
   if (Array.isArray(eastwardGrid) && Array.isArray(northwardGrid)) {
     let stride = vectorStrideForZoom(zoom);
@@ -1316,6 +1317,10 @@ async function refreshOceanVisuals() {
   if (token !== state.oceanVisuals.requestToken || !queryIndex) {
     return;
   }
+  const frameData = await loadActiveFrameData(queryIndex);
+  if (token !== state.oceanVisuals.requestToken || !frameData) {
+    return;
+  }
 
   const metadata = activeConditionMetadata();
   const condition = activeConditionDefinition();
@@ -1324,7 +1329,7 @@ async function refreshOceanVisuals() {
   }
 
   const frameIndex = Math.min(state.activeFrameIndex, Math.max((queryIndex.times_utc || []).length - 1, 0));
-  const collections = buildOceanRenderCollections(queryIndex, metadata, condition, frameIndex, state.map.getZoom());
+  const collections = buildOceanRenderCollections(queryIndex, frameData, metadata, condition, frameIndex, state.map.getZoom());
   if (token !== state.oceanVisuals.requestToken) {
     return;
   }
@@ -1373,11 +1378,62 @@ async function loadActiveQueryIndex() {
   return payload;
 }
 
+function activeFrameEntry(queryIndex) {
+  const frameIndex = Math.min(state.activeFrameIndex, Math.max((queryIndex?.times_utc || []).length - 1, 0));
+  return queryIndex?.frames?.[frameIndex] ?? null;
+}
+
+async function loadActiveFrameData(queryIndex = null) {
+  const resolvedQueryIndex = queryIndex || (await loadActiveQueryIndex());
+  const conditionId = state.activeConditionId;
+  const metadata = activeConditionMetadata();
+  if (!conditionId || !metadata || !resolvedQueryIndex) {
+    return null;
+  }
+
+  const frameEntry = activeFrameEntry(resolvedQueryIndex);
+  if (!frameEntry?.key) {
+    const gridKey = metadata.query_value_key || activeConditionDefinition()?.value_key || "values_celsius";
+    if (Array.isArray(resolvedQueryIndex?.[gridKey])) {
+      return {
+        key: resolvedQueryIndex.frame_keys?.[state.activeFrameIndex] ?? null,
+        time_utc: resolvedQueryIndex.times_utc?.[state.activeFrameIndex] ?? null,
+        [gridKey]: resolvedQueryIndex?.[gridKey]?.[state.activeFrameIndex] ?? null,
+        components: Object.fromEntries(
+          Object.entries(resolvedQueryIndex?.components || {}).map(([componentName, frames]) => [
+            componentName,
+            frames?.[state.activeFrameIndex] ?? null
+          ])
+        )
+      };
+    }
+    return null;
+  }
+
+  if (!state.oceanFrameData[conditionId]) {
+    state.oceanFrameData[conditionId] = {};
+  }
+  if (state.oceanFrameData[conditionId][frameEntry.key]) {
+    return state.oceanFrameData[conditionId][frameEntry.key];
+  }
+
+  const response = await fetch(new URL(frameEntry.data_url, window.location.href).toString(), {
+    cache: "no-store"
+  });
+  if (!response.ok) {
+    throw new Error("Ocean frame data could not be loaded.");
+  }
+  const payload = await response.json();
+  state.oceanFrameData[conditionId][frameEntry.key] = payload;
+  return payload;
+}
+
 async function fetchOceanSample(latitude, longitude) {
   const metadata = activeConditionMetadata();
   const condition = activeConditionDefinition();
   const queryIndex = await loadActiveQueryIndex();
-  if (!metadata || !condition || !queryIndex) {
+  const frameData = await loadActiveFrameData(queryIndex);
+  if (!metadata || !condition || !queryIndex || !frameData) {
     return {
       condition_id: state.activeConditionId,
       frame_index: state.activeFrameIndex,
@@ -1414,8 +1470,7 @@ async function fetchOceanSample(latitude, longitude) {
   const longitudes = queryIndex.longitudes || [];
   const frameIndex = Math.min(state.activeFrameIndex, Math.max((queryIndex.times_utc || []).length - 1, 0));
   const gridKey = metadata.query_value_key || condition.value_key || "values_celsius";
-  const values = queryIndex[gridKey] || queryIndex.values_celsius;
-  const frameGrid = values?.[frameIndex] ?? null;
+  const frameGrid = frameData?.[gridKey] ?? queryIndex?.[gridKey]?.[frameIndex] ?? null;
   const latEdges = buildCellEdges(latitudes);
   const lonEdges = buildCellEdges(longitudes);
   const rowIndex = clamp(findIntervalIndex(latEdges, latitude), 0, Math.max(latitudes.length - 1, 0));

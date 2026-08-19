@@ -90,6 +90,24 @@ def _restore_remote_ocean_data(data_target: Path) -> bool:
                 restored_condition = False
                 continue
             (condition_root / filename).write_bytes(payload)
+        query_index_path = condition_root / "query_index.json"
+        try:
+            query_index = json.loads(query_index_path.read_text(encoding="utf-8"))
+        except json.JSONDecodeError:
+            restored_condition = False
+            query_index = {}
+        for frame_entry in query_index.get("frames", []):
+            frame_relative_url = str(frame_entry.get("data_url", "")).lstrip("./")
+            frame_key = frame_entry.get("key")
+            if not frame_relative_url or not frame_key:
+                continue
+            frame_payload = _fetch_bytes(f"{site_url}/{frame_relative_url}?source=build-site")
+            if frame_payload is None:
+                restored_condition = False
+                continue
+            frame_root = condition_root / "frames"
+            frame_root.mkdir(parents=True, exist_ok=True)
+            (frame_root / f"{frame_key}.json").write_bytes(frame_payload)
         restored_any = restored_any or restored_condition
 
     return restored_any
