@@ -1,79 +1,96 @@
-# Digital Baltic
+# Digital Baltic Sea
 
-Digital Baltic is a public-facing website project, not just a temperature downloader.
+> **Project type:** Personal Project  
+> **Field:** Marine data science · ocean visualisation · web development · science communication  
+> **Data:** Copernicus Marine · AIS  
+> **Status:** Active development
 
-This repository powers a GitHub Pages site that turns Baltic Sea data into a browsable coastal experience focused on Copenhagen and the Oresund. The goal is to make marine conditions easier to explore in a web-native format, with a stronger sense of place than a raw data portal.
+## Overview
 
-## What The Website Is
+**Digital Baltic Sea** is an interactive web project designed to make Baltic Sea environmental data accessible and intuitive for non-specialists.
 
-The site combines environmental layers, coastal storytelling, and map-based interaction into one static web experience. It is designed to be understandable for non-specialists while still keeping data provenance visible.
+The project combines oceanographic data, vessel information and map-based visualisation into a public-facing digital representation of marine conditions.
 
-Today the project includes:
+The initial focus is on **Copenhagen and the Øresund**, with the longer-term goal of extending the concept across the Baltic Sea.
 
-- a hosted website built from `frontend/` into `site/`,
-- interactive ocean-condition views for surface temperature, currents, salinity, oxygen, waves, and sea level,
-- live or demo AIS vessel context around Copenhagen and the Oresund,
-- modelled underwater shipping-noise overlays derived from the current vessel scene,
-- localised interface content and educational panels that explain what users are looking at.
+## Live Website
 
-## What This Repo Does
+**Digital Baltic Sea:**  
+https://matteo-mvh.github.io/Digital-Baltic/
 
-This repository contains both sides of the project:
+## Motivation
 
-- the website frontend in `frontend/`,
-- the static deployment output in `site/`,
-- the data-processing pipeline in `data_pipeline/`,
-- site build and update scripts in `scripts/`,
-- supporting noise-modelling logic in `noise/`,
-- documentation for sources and decisions in `docs/`.
+Large amounts of high-quality oceanographic data are publicly available, but accessing and interpreting them often requires specialist tools and knowledge.
 
-The repo is therefore both a website codebase and the machinery that prepares its ocean data.
+Digital Baltic Sea explores how those datasets can instead be presented through an intuitive web interface.
 
-## Hosting And Deployment
+The project aims to bridge:
 
-The project is set up to host the website on GitHub Pages.
+- ocean science
+- environmental monitoring
+- open marine data
+- interactive visualisation
+- public science communication
 
-## Live Site
+## Current Environmental Layers
 
-Open the deployed website directly here:
+The website architecture supports marine variables including:
 
-- [Digital Baltic live site](https://matteo-mvh.github.io/Digital-Baltic/)
-
-From GitHub itself, there is not always a big repository-header website button for GitHub Pages. The reliable way to open it on Wednesday, August 19, 2026 is:
-
-1. Open the repository on GitHub.
-2. Go to `Settings`.
-3. Open `Pages` in the sidebar.
-4. Click `Visit site`.
-
-- `.github/workflows/deploy-site.yml` builds the static site and deploys `site/`
-- `.github/workflows/update-ocean-data.yml` refreshes Copernicus-backed ocean assets on a schedule and redeploys the website
-- `scripts/build_site.py` assembles the publishable site bundle
-
-This means the repository is meant to publish a living website, not just store scripts for downloading model data.
-
-## Data And Layers
-
-Digital Baltic currently uses Copernicus Marine as its primary ocean-data source. The site is built around modelled analysis and forecast products rather than direct in-water observation, and that distinction is important to keep visible in public-facing copy.
-
-The current experience is broader than temperature alone. The codebase already supports:
-
-- surface temperature
+- sea-surface temperature
 - currents
 - salinity
 - dissolved oxygen
 - waves
 - sea level
-- AIS-backed vessel context
-- modelled underwater noise
 
-More detail on source provenance is documented in [docs/data_sources.md](/C:/Users/Mmm/Documents/ChatGPT/Digital%20Baltic/docs/data_sources.md).
+The project also explores contextual layers such as:
 
-## Project Structure
+- AIS vessel positions
+- shipping activity
+- modelled underwater shipping noise
+
+## Data Sources
+
+### Copernicus Marine
+
+Oceanographic environmental data are primarily sourced from **Copernicus Marine** analysis and forecast products.
+
+These are modelled ocean products rather than direct measurements at every displayed location.
+
+Maintaining clear data provenance and communicating this distinction is an important part of the project.
+
+Further information is available in:
 
 ```text
-Digital Baltic/
-├── README.md
+docs/data_sources.md
+```
+
+### AIS
+
+AIS vessel information is used to provide context on maritime traffic in and around Copenhagen and the Øresund.
+
+Vessel information can also be used as input for experimental shipping-noise visualisations.
+
+## Website Concept
+
+The project is designed as more than a conventional scientific data portal.
+
+The interface combines:
+
+- interactive maps
+- marine environmental layers
+- time-dependent data
+- coastal context
+- explanatory information
+- science communication
+- environmental storytelling
+
+The goal is to allow users to explore **how the Baltic Sea changes through both space and time**.
+
+## Repository Structure
+
+```text
+Digital-Baltic/
 ├── data/
 ├── data_pipeline/
 ├── docs/
@@ -81,9 +98,95 @@ Digital Baltic/
 ├── noise/
 ├── scripts/
 ├── site/
-└── .github/workflows/
+└── .github/
+    └── workflows/
 ```
 
-## Status
+### `frontend/`
 
-This is still an evolving project, but it is already structured as a publishable Baltic Sea website with its own frontend, deployment flow, and automated data-refresh pipeline. The repository should be understood as the home of that website experience, not as a single-purpose temperature prototype.
+Source files for the interactive website interface.
+
+### `data_pipeline/`
+
+Scripts responsible for retrieving and preparing marine environmental data.
+
+### `noise/`
+
+Experimental modelling components related to vessel activity and underwater shipping noise.
+
+### `scripts/`
+
+Utilities for preparing and building the deployable website.
+
+### `site/`
+
+Generated static website used for deployment.
+
+### `.github/workflows/`
+
+GitHub Actions workflows used for automated data updates and website deployment.
+
+## Automated Data Pipeline
+
+The project is designed to automatically update marine data rather than relying entirely on manually generated files.
+
+The workflow can:
+
+1. retrieve updated environmental data
+2. process the required variables
+3. generate web-ready data products
+4. rebuild the website
+5. deploy the updated version through GitHub Pages
+
+This makes the website capable of developing into a continuously updated marine-data platform.
+
+## Hosting
+
+The website is deployed using **GitHub Pages**.
+
+GitHub Actions are used for site building and automated data-refresh workflows.
+
+Relevant workflows include:
+
+```text
+.github/workflows/deploy-site.yml
+.github/workflows/update-ocean-data.yml
+```
+
+## Planned Development
+
+The longer-term concept includes additional Baltic Sea information such as:
+
+- biodiversity
+- oxygen conditions
+- eutrophication
+- contaminants
+- underwater noise
+- maritime traffic
+- coastal habitats
+- additional physical ocean variables
+- multilingual science communication
+
+The platform is intended to gradually expand as new datasets and visualisations are integrated.
+
+## What This Project Demonstrates
+
+Digital Baltic Sea combines several technical and scientific areas:
+
+- marine data science
+- Copernicus Marine data
+- geospatial environmental data
+- automated data pipelines
+- web development
+- interactive mapping
+- GitHub Actions
+- GitHub Pages deployment
+- AIS data
+- environmental visualisation
+- science communication
+
+## Project Status
+
+**Active personal project.**
+
+The platform is under ongoing development, so individual layers and features may change as new datasets and functionality are added.
