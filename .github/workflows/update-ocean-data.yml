@@ -2,8 +2,8 @@ name: Update Ocean Data
 
 on:
   workflow_dispatch:
-  schedule:
-    - cron: "15 3 * * *"
+  # schedule:
+  #   - cron: "15 3 * * *"
 
 permissions:
   contents: read
