@@ -16,7 +16,7 @@ The initial focus is on **Copenhagen and the Øresund**, with the longer-term go
 ## Live Website
 
 **Digital Baltic Sea:**  
-https://matteo-mvh.github.io/Digital-Baltic/
+[https://matteo-mvh.github.io/Digital-Baltic/](https://matteo-mvh.github.io/digital-baltic-sea/)
 
 ## Motivation
 
